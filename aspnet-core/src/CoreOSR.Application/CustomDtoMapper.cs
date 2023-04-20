@@ -3,23 +3,29 @@ using Abp.Application.Features;
 using Abp.Auditing;
 using Abp.Authorization;
 using Abp.Authorization.Users;
+using Abp.DynamicEntityProperties;
 using Abp.EntityHistory;
 using Abp.Localization;
 using Abp.Notifications;
 using Abp.Organizations;
 using Abp.UI.Inputs;
+using Abp.Webhooks;
 using AutoMapper;
+using IdentityServer4.Extensions;
 using CoreOSR.Auditing.Dto;
 using CoreOSR.Authorization.Accounts.Dto;
+using CoreOSR.Authorization.Delegation;
 using CoreOSR.Authorization.Permissions.Dto;
 using CoreOSR.Authorization.Roles;
 using CoreOSR.Authorization.Roles.Dto;
 using CoreOSR.Authorization.Users;
+using CoreOSR.Authorization.Users.Delegation.Dto;
 using CoreOSR.Authorization.Users.Dto;
 using CoreOSR.Authorization.Users.Importing.Dto;
 using CoreOSR.Authorization.Users.Profile.Dto;
 using CoreOSR.Chat;
 using CoreOSR.Chat.Dto;
+using CoreOSR.DynamicEntityProperties.Dto;
 using CoreOSR.Editions;
 using CoreOSR.Editions.Dto;
 using CoreOSR.Friendships;
@@ -34,6 +40,7 @@ using CoreOSR.MultiTenancy.Payments.Dto;
 using CoreOSR.Notifications.Dto;
 using CoreOSR.Organizations.Dto;
 using CoreOSR.Sessions.Dto;
+using CoreOSR.WebHooks.Dto;
 
 namespace CoreOSR
 {
@@ -68,6 +75,8 @@ namespace CoreOSR
             configuration.CreateMap<RoleEditDto, Role>().ReverseMap();
             configuration.CreateMap<Role, RoleListDto>();
             configuration.CreateMap<UserRole, UserListRoleDto>();
+
+            
 
             //Edition
             configuration.CreateMap<EditionEditDto, SubscribableEdition>().ReverseMap();
@@ -131,6 +140,28 @@ namespace CoreOSR
 
             //OrganizationUnit
             configuration.CreateMap<OrganizationUnit, OrganizationUnitDto>();
+
+            //Webhooks
+            configuration.CreateMap<WebhookSubscription, GetAllSubscriptionsOutput>();
+            configuration.CreateMap<WebhookSendAttempt, GetAllSendAttemptsOutput>()
+                .ForMember(webhookSendAttemptListDto => webhookSendAttemptListDto.WebhookName,
+                    options => options.MapFrom(l => l.WebhookEvent.WebhookName))
+                .ForMember(webhookSendAttemptListDto => webhookSendAttemptListDto.Data,
+                    options => options.MapFrom(l => l.WebhookEvent.Data));
+
+            configuration.CreateMap<WebhookSendAttempt, GetAllSendAttemptsOfWebhookEventOutput>();
+
+            configuration.CreateMap<DynamicProperty, DynamicPropertyDto>().ReverseMap();
+            configuration.CreateMap<DynamicPropertyValue, DynamicPropertyValueDto>().ReverseMap();
+            configuration.CreateMap<DynamicEntityProperty, DynamicEntityPropertyDto>()
+                .ForMember(dto => dto.DynamicPropertyName,
+                    options => options.MapFrom(entity => entity.DynamicProperty.DisplayName.IsNullOrEmpty() ? entity.DynamicProperty.PropertyName : entity.DynamicProperty.DisplayName));
+            configuration.CreateMap<DynamicEntityPropertyDto, DynamicEntityProperty>();
+
+            configuration.CreateMap<DynamicEntityPropertyValue, DynamicEntityPropertyValueDto>().ReverseMap();
+            
+            //User Delegations
+            configuration.CreateMap<CreateUserDelegationDto, UserDelegation>();
 
             /* ADD YOUR OWN CUSTOM AUTOMAPPER MAPPINGS HERE */
         }

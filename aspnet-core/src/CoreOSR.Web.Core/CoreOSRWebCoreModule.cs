@@ -1,24 +1,34 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Abp.AspNetCore;
 using Abp.AspNetCore.Configuration;
+using Abp.AspNetCore.MultiTenancy;
 using Abp.AspNetCore.SignalR;
 using Abp.AspNetZeroCore.Licensing;
 using Abp.AspNetZeroCore.Web;
 using Abp.Configuration.Startup;
 using Abp.Dependency;
+using Abp.Domain.Entities;
 using Abp.Hangfire;
 using Abp.Hangfire.Configuration;
 using Abp.IO;
 using Abp.Modules;
+using Abp.MultiTenancy;
 using Abp.Reflection.Extensions;
 using Abp.Runtime.Caching.Redis;
+using Abp.Text;
+using Abp.Timing;
+using Abp.Web.MultiTenancy;
 using Abp.Zero.Configuration;
 using Castle.Core.Internal;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using CoreOSR.Authentication.TwoFactor;
 using CoreOSR.Chat;
 using CoreOSR.Configuration;
 using CoreOSR.EntityFrameworkCore;
@@ -26,7 +36,10 @@ using CoreOSR.Startup;
 using CoreOSR.Web.Authentication.JwtBearer;
 using CoreOSR.Web.Authentication.TwoFactor;
 using CoreOSR.Web.Chat.SignalR;
+using CoreOSR.Web.Common;
 using CoreOSR.Web.Configuration;
+using CoreOSR.Web.DashboardCustomization;
+using Abp.Extensions;
 
 namespace CoreOSR.Web
 {
@@ -41,10 +54,10 @@ namespace CoreOSR.Web
     )]
     public class CoreOSRWebCoreModule : AbpModule
     {
-        private readonly IHostingEnvironment _env;
+        private readonly IWebHostEnvironment _env;
         private readonly IConfigurationRoot _appConfiguration;
 
-        public CoreOSRWebCoreModule(IHostingEnvironment env)
+        public CoreOSRWebCoreModule(IWebHostEnvironment env)
         {
             _env = env;
             _appConfiguration = env.GetAppConfiguration();
@@ -65,20 +78,23 @@ namespace CoreOSR.Web
                     typeof(CoreOSRApplicationModule).GetAssembly()
                 );
 
-            Configuration.Caching.Configure(TwoFactorCodeCacheItem.CacheName, cache =>
-            {
-                cache.DefaultAbsoluteExpireTime = TimeSpan.FromMinutes(2);
-            });
+            Configuration.Caching.Configure(TwoFactorCodeCacheItem.CacheName,
+                cache => { cache.DefaultSlidingExpireTime = TwoFactorCodeCacheItem.DefaultSlidingExpireTime; });
 
-            if (_appConfiguration["Authentication:JwtBearer:IsEnabled"] != null && bool.Parse(_appConfiguration["Authentication:JwtBearer:IsEnabled"]))
+            if (_appConfiguration["Authentication:JwtBearer:IsEnabled"] != null &&
+                bool.Parse(_appConfiguration["Authentication:JwtBearer:IsEnabled"]))
             {
                 ConfigureTokenAuth();
             }
 
             Configuration.ReplaceService<IAppConfigurationAccessor, AppConfigurationAccessor>();
 
-            //Uncomment this line to use Hangfire instead of default background job manager (remember also to uncomment related lines in Startup.cs file(s)).
-            //Configuration.BackgroundJobs.UseHangfire();
+            Configuration.ReplaceService<IAppConfigurationWriter, AppConfigurationWriter>();
+
+            if (WebConsts.HangfireDashboardEnabled)
+            {
+                Configuration.BackgroundJobs.UseHangfire();
+            }
 
             //Uncomment this line to use Redis cache instead of in-memory cache.
             //See app.config for Redis configuration and connection string
@@ -94,10 +110,14 @@ namespace CoreOSR.Web
             IocManager.Register<TokenAuthConfiguration>();
             var tokenAuthConfig = IocManager.Resolve<TokenAuthConfiguration>();
 
-            tokenAuthConfig.SecurityKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(_appConfiguration["Authentication:JwtBearer:SecurityKey"]));
+            tokenAuthConfig.SecurityKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(_appConfiguration["Authentication:JwtBearer:SecurityKey"])
+            );
+
             tokenAuthConfig.Issuer = _appConfiguration["Authentication:JwtBearer:Issuer"];
             tokenAuthConfig.Audience = _appConfiguration["Authentication:JwtBearer:Audience"];
-            tokenAuthConfig.SigningCredentials = new SigningCredentials(tokenAuthConfig.SecurityKey, SecurityAlgorithms.HmacSha256);
+            tokenAuthConfig.SigningCredentials =
+                new SigningCredentials(tokenAuthConfig.SecurityKey, SecurityAlgorithms.HmacSha256);
             tokenAuthConfig.AccessTokenExpiration = AppConsts.AccessTokenExpiration;
             tokenAuthConfig.RefreshTokenExpiration = AppConsts.RefreshTokenExpiration;
         }
@@ -110,25 +130,18 @@ namespace CoreOSR.Web
         public override void PostInitialize()
         {
             SetAppFolders();
+
+            IocManager.Resolve<ApplicationPartManager>()
+                .AddApplicationPartsIfNotAddedBefore(typeof(CoreOSRWebCoreModule).Assembly);
         }
 
         private void SetAppFolders()
         {
             var appFolders = IocManager.Resolve<AppFolders>();
 
-            appFolders.SampleProfileImagesFolder = Path.Combine(_env.WebRootPath, $"Common{Path.DirectorySeparatorChar}Images{Path.DirectorySeparatorChar}SampleProfilePics");
+            appFolders.SampleProfileImagesFolder = Path.Combine(_env.WebRootPath,
+                $"Common{Path.DirectorySeparatorChar}Images{Path.DirectorySeparatorChar}SampleProfilePics");
             appFolders.WebLogsFolder = Path.Combine(_env.ContentRootPath, $"App_Data{Path.DirectorySeparatorChar}Logs");
-
-#if NET461
-            if (_env.IsDevelopment())
-            {
-                var currentAssemblyDirectoryPath = typeof(CoreOSRWebCoreModule).GetAssembly().GetDirectoryPathOrNull();
-                if (currentAssemblyDirectoryPath != null)
-                {
-                    appFolders.WebLogsFolder = Path.Combine(currentAssemblyDirectoryPath, $"App_Data{Path.DirectorySeparatorChar}Logs");
-                }
-            }
-#endif
         }
     }
 }

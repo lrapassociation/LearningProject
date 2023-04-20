@@ -9,9 +9,11 @@ using Abp.Runtime.Session;
 using Microsoft.AspNetCore.Mvc;
 using CoreOSR.Configuration;
 using CoreOSR.MultiTenancy;
+using CoreOSR.UiCustomization;
 using CoreOSR.Url;
 using CoreOSR.Web.Public.Startup;
 using CoreOSR.Web.Session;
+using CoreOSR.Web.UiCustomization;
 
 namespace CoreOSR.Web.Public.Views.Shared.Components.Header
 {
@@ -25,7 +27,8 @@ namespace CoreOSR.Web.Public.Views.Shared.Components.Header
         private readonly IPerRequestSessionCache _sessionCache;
         private readonly IWebUrlService _webUrlService;
         private readonly TenantManager _tenantManager;
-
+        private readonly IUiThemeCustomizerFactory _uiThemeCustomizerFactory;
+        
         public HeaderViewComponent(
             IUserNavigationManager userNavigationManager, 
             IMultiTenancyConfig multiTenancyConfig,
@@ -34,7 +37,8 @@ namespace CoreOSR.Web.Public.Views.Shared.Components.Header
             ISettingManager settingManager, 
             IPerRequestSessionCache sessionCache,
             IWebUrlService webUrlService, 
-            TenantManager tenantManager)
+            TenantManager tenantManager, 
+            IUiThemeCustomizerFactory uiThemeCustomizerFactory)
         {
             _userNavigationManager = userNavigationManager;
             _multiTenancyConfig = multiTenancyConfig;
@@ -44,6 +48,7 @@ namespace CoreOSR.Web.Public.Views.Shared.Components.Header
             _sessionCache = sessionCache;
             _webUrlService = webUrlService;
             _tenantManager = tenantManager;
+            _uiThemeCustomizerFactory = uiThemeCustomizerFactory;
         }
 
         public async Task<IViewComponentResult> InvokeAsync(string currentPageName = "")
@@ -59,17 +64,30 @@ namespace CoreOSR.Web.Public.Views.Shared.Components.Header
             {
                 LoginInformations = await _sessionCache.GetCurrentLoginInformationsAsync(),
                 IsInHostView = !_abpSession.TenantId.HasValue,
-                Languages = _languageManager.GetLanguages().Where(l => !l.IsDisabled).ToList(),
+                Languages = _languageManager.GetActiveLanguages().ToList(),
                 CurrentLanguage = _languageManager.CurrentLanguage,
                 Menu = await _userNavigationManager.GetMenuAsync(FrontEndNavigationProvider.MenuName, _abpSession.ToUserIdentifier()),
                 CurrentPageName = currentPageName,
                 IsMultiTenancyEnabled = _multiTenancyConfig.IsEnabled,
                 TenantRegistrationEnabled = await _settingManager.GetSettingValueAsync<bool>(AppSettings.TenantManagement.AllowSelfRegistration),
                 AdminWebSiteRootAddress = _webUrlService.GetServerRootAddress(tenancyName).EnsureEndsWith('/'),
-                WebSiteRootAddress = _webUrlService.GetSiteRootAddress(tenancyName).EnsureEndsWith('/')
+                WebSiteRootAddress = _webUrlService.GetSiteRootAddress(tenancyName).EnsureEndsWith('/'),
+                LogoSkin = await GetLogoSkin()
             };
 
             return View(headerModel);
+        }
+        
+        private async Task<string> GetLogoSkin()
+        {
+            var themeCustomizer = await _uiThemeCustomizerFactory.GetCurrentUiCustomizer();
+            var theme = await themeCustomizer.GetUiSettings();
+            if (theme.IsTopMenuUsed || theme.IsTabMenuUsed)
+            {
+                return theme.BaseSettings.Layout.DarkMode ? "light" : "dark";
+            }
+
+            return theme.BaseSettings.Menu.AsideSkin;
         }
     }
 }

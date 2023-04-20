@@ -26,11 +26,11 @@ namespace CoreOSR.Web.Controllers
         private readonly AbpLoginResultTypeHelper _abpLoginResultTypeHelper;
 
         public UiController(
-            IPerRequestSessionCache sessionCache, 
-            IMultiTenancyConfig multiTenancyConfig, 
-            IAccountAppService accountAppService, 
-            LogInManager logInManager, 
-            SignInManager signInManager, 
+            IPerRequestSessionCache sessionCache,
+            IMultiTenancyConfig multiTenancyConfig,
+            IAccountAppService accountAppService,
+            LogInManager logInManager,
+            SignInManager signInManager,
             AbpLoginResultTypeHelper abpLoginResultTypeHelper)
         {
             _sessionCache = sessionCache;
@@ -59,13 +59,20 @@ namespace CoreOSR.Web.Controllers
         }
 
         [HttpGet]
-        public IActionResult Login()
+        public async Task<IActionResult> Login(string returnUrl = "")
         {
+            if (!string.IsNullOrEmpty(returnUrl))
+            {
+                ViewBag.ReturnUrl = returnUrl;
+            }
+
+            await _signInManager.SignOutAsync();
+            
             return View();
         }
 
         [HttpPost]
-        public async Task<IActionResult> Login(LoginModel model)
+        public async Task<IActionResult> Login(LoginModel model, string returnUrl = "")
         {
             if (model.TenancyName != null)
             {
@@ -95,6 +102,11 @@ namespace CoreOSR.Web.Controllers
             if (signInResult.RequiresTwoFactor)
             {
                 throw new UserFriendlyException(L("RequiresTwoFactorAuth"));
+            }
+
+            if (!string.IsNullOrEmpty(returnUrl))
+            {
+                return Redirect(returnUrl);
             }
 
             return RedirectToAction("Index");

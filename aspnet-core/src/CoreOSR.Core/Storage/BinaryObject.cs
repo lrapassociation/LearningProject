@@ -11,7 +11,10 @@ namespace CoreOSR.Storage
     {
         public virtual int? TenantId { get; set; }
 
+        public virtual string Description { get; set; }
+
         [Required]
+        [MaxLength(BinaryObjectConsts.BytesMaxSize)]
         public virtual byte[] Bytes { get; set; }
 
         public BinaryObject()
@@ -19,11 +22,12 @@ namespace CoreOSR.Storage
             Id = SequentialGuidGenerator.Instance.Create();
         }
 
-        public BinaryObject(int? tenantId, byte[] bytes)
+        public BinaryObject(int? tenantId, byte[] bytes, string description = null)
             : this()
         {
             TenantId = tenantId;
             Bytes = bytes;
+            Description = description;
         }
     }
 }

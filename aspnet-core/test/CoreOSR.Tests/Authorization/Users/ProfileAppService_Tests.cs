@@ -1,5 +1,8 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
+using CoreOSR.Authentication.TwoFactor.Google;
 using CoreOSR.Authorization.Users;
 using CoreOSR.Authorization.Users.Profile;
 using CoreOSR.Authorization.Users.Profile.Dto;
@@ -7,16 +10,20 @@ using CoreOSR.Test.Base;
 using Shouldly;
 using Xunit;
 
+// TODO: Add test for two factor authentication.
+
 namespace CoreOSR.Tests.Authorization.Users
 {
     // ReSharper disable once InconsistentNaming
     public class ProfileAppService_Tests : AppTestBase
     {
         private readonly IProfileAppService _profileAppService;
+        private readonly GoogleTwoFactorAuthenticateService _googleTwoFactorAuthenticateService;
 
         public ProfileAppService_Tests()
         {
             _profileAppService = Resolve<IProfileAppService>();
+            _googleTwoFactorAuthenticateService = Resolve<GoogleTwoFactorAuthenticateService>();
         }
 
         [Fact]
@@ -28,7 +35,12 @@ namespace CoreOSR.Tests.Authorization.Users
             currentUser.GoogleAuthenticatorKey.ShouldBeNull();
 
             //Act
-            await _profileAppService.UpdateGoogleAuthenticatorKey();
+            var result = await _profileAppService.GenerateGoogleAuthenticatorKey();
+            await _profileAppService.UpdateGoogleAuthenticatorKey(new UpdateGoogleAuthenticatorKeyInput
+            {
+                GoogleAuthenticatorKey = result.GoogleAuthenticatorKey,
+                AuthenticatorCode = _googleTwoFactorAuthenticateService.GetCurrentPins(result.GoogleAuthenticatorKey, TimeSpan.FromMinutes(5)).First()
+            });
 
             currentUser = await GetCurrentUserAsync();
 

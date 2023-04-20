@@ -25,5 +25,8 @@ namespace CoreOSR.Web.Models.TokenAuth
         public string ReturnUrl { get; set; }
 
         public string RefreshToken { get; set; }
+
+        public int RefreshTokenExpireInSeconds { get; set; }
+        public string c { get; set; }
     }
 }

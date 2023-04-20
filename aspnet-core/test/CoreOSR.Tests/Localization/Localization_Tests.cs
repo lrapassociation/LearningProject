@@ -13,15 +13,17 @@ namespace CoreOSR.Tests.Localization
         [Theory]
         [InlineData("en")]
         [InlineData("en-US")]
-        [InlineData("en-GB")]
+        [InlineData("en-AU")]
         public void Simple_Localization_Test(string cultureName)
         {
             CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(cultureName);
 
             Resolve<ILanguageManager>().CurrentLanguage.Name.ShouldBe("en");
 
-            Resolve<ILocalizationManager>()
-                .GetString(AbpZeroConsts.LocalizationSourceName, "Identity.UserNotInRole")
+            var localizationManager = Resolve<ILocalizationManager>();
+            var allSources = localizationManager.GetAllSources();
+
+            localizationManager.GetString(AbpZeroConsts.LocalizationSourceName, "Identity.UserNotInRole")
                 .ShouldBe("User is not in role '{0}'.");
         }
     }

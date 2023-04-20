@@ -8,9 +8,11 @@ namespace CoreOSR.ApiClient
     {
         string GetAccessToken();
 
+        string GetEncryptedAccessToken();
+
         Task<AbpAuthenticateResultModel> LoginAsync();
 
-        Task<string> RefreshTokenAsync();
+        Task<(string accessToken, string encryptedAccessToken)> RefreshTokenAsync();
 
         void Logout();
 

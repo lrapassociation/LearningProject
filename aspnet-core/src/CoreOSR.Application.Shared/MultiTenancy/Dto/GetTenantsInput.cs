@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using Abp.Runtime.Validation;
+using CoreOSR.Common;
 using CoreOSR.Dto;
 
 namespace CoreOSR.MultiTenancy.Dto
@@ -21,7 +22,10 @@ namespace CoreOSR.MultiTenancy.Dto
                 Sorting = "TenancyName";
             }
 
-            Sorting = Sorting.Replace("editionDisplayName", "Edition.DisplayName");
+            Sorting = DtoSortingHelper.ReplaceSorting(Sorting, s =>
+            {
+                return s.Replace("editionDisplayName", "Edition.DisplayName");
+            });
         }
     }
 }

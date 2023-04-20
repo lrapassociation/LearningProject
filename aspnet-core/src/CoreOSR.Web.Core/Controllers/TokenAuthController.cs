@@ -6,6 +6,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
+using System.Web;
 using Abp;
 using Abp.AspNetCore.Mvc.Authorization;
 using Abp.AspNetZeroCore.Web.Authentication.External;
@@ -27,6 +28,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using CoreOSR.Authentication.TwoFactor;
 using CoreOSR.Authentication.TwoFactor.Google;
 using CoreOSR.Authorization;
 using CoreOSR.Authorization.Accounts.Dto;
@@ -38,28 +40,26 @@ using CoreOSR.Web.Models.TokenAuth;
 using CoreOSR.Authorization.Impersonation;
 using CoreOSR.Authorization.Roles;
 using CoreOSR.Configuration;
-using CoreOSR.Debugging;
 using CoreOSR.Identity;
 using CoreOSR.Net.Sms;
 using CoreOSR.Notifications;
 using CoreOSR.Security.Recaptcha;
 using CoreOSR.Web.Authentication.External;
 using CoreOSR.Web.Common;
+using CoreOSR.Authorization.Delegation;
 
 namespace CoreOSR.Web.Controllers
 {
     [Route("api/[controller]/[action]")]
     public class TokenAuthController : CoreOSRControllerBase
     {
-        private const string UserIdentifierClaimType = "http://aspnetzero.com/claims/useridentifier";
-
         private readonly LogInManager _logInManager;
         private readonly ITenantCache _tenantCache;
         private readonly AbpLoginResultTypeHelper _abpLoginResultTypeHelper;
         private readonly TokenAuthConfiguration _configuration;
         private readonly UserManager _userManager;
         private readonly ICacheManager _cacheManager;
-        private readonly IOptions<JwtBearerOptions> _jwtOptions;
+        private readonly IOptions<AsyncJwtBearerOptions> _jwtOptions;
         private readonly IExternalAuthConfiguration _externalAuthConfiguration;
         private readonly IExternalAuthManager _externalAuthManager;
         private readonly UserRegistrationManager _userRegistrationManager;
@@ -75,6 +75,7 @@ namespace CoreOSR.Web.Controllers
         private readonly IJwtSecurityStampHandler _securityStampHandler;
         private readonly AbpUserClaimsPrincipalFactory<User, Role> _claimsPrincipalFactory;
         public IRecaptchaValidator RecaptchaValidator { get; set; }
+        private readonly IUserDelegationManager _userDelegationManager;
 
         public TokenAuthController(
             LogInManager logInManager,
@@ -83,7 +84,7 @@ namespace CoreOSR.Web.Controllers
             TokenAuthConfiguration configuration,
             UserManager userManager,
             ICacheManager cacheManager,
-            IOptions<JwtBearerOptions> jwtOptions,
+            IOptions<AsyncJwtBearerOptions> jwtOptions,
             IExternalAuthConfiguration externalAuthConfiguration,
             IExternalAuthManager externalAuthManager,
             UserRegistrationManager userRegistrationManager,
@@ -97,7 +98,8 @@ namespace CoreOSR.Web.Controllers
             ExternalLoginInfoManagerFactory externalLoginInfoManagerFactory,
             ISettingManager settingManager,
             IJwtSecurityStampHandler securityStampHandler,
-            AbpUserClaimsPrincipalFactory<User, Role> claimsPrincipalFactory)
+            AbpUserClaimsPrincipalFactory<User, Role> claimsPrincipalFactory,
+            IUserDelegationManager userDelegationManager)
         {
             _logInManager = logInManager;
             _tenantCache = tenantCache;
@@ -121,7 +123,23 @@ namespace CoreOSR.Web.Controllers
             _identityOptions = identityOptions.Value;
             _claimsPrincipalFactory = claimsPrincipalFactory;
             RecaptchaValidator = NullRecaptchaValidator.Instance;
+            _userDelegationManager = userDelegationManager;
         }
+
+        private async Task<string> EncryptQueryParameters(long userId, int tenantId, string passwordResetCode)
+        {
+            var expirationHours = await _settingManager.GetSettingValueAsync<int>(
+                AppSettings.UserManagement.Password.PasswordResetCodeExpirationHours
+            );
+
+            var expireDate = Uri.EscapeDataString(Clock.Now.AddHours(expirationHours)
+                .ToString(CoreOSRConsts.DateTimeOffsetFormat));
+
+            var query = $"userId={userId}&tenantId={tenantId}&resetCode={passwordResetCode}&expireDate={expireDate}";
+
+            return SimpleStringCipher.Instance.Encrypt(query);
+        }
+
 
         [HttpPost]
         public async Task<AuthenticateResultModel> Authenticate([FromBody] AuthenticateModel model)
@@ -139,10 +157,12 @@ namespace CoreOSR.Web.Controllers
 
             var returnUrl = model.ReturnUrl;
 
-            if (model.SingleSignIn.HasValue && model.SingleSignIn.Value && loginResult.Result == AbpLoginResultType.Success)
+            if (model.SingleSignIn.HasValue && model.SingleSignIn.Value &&
+                loginResult.Result == AbpLoginResultType.Success)
             {
                 loginResult.User.SetSignInToken();
-                returnUrl = AddSingleSignInParametersToReturnUrl(model.ReturnUrl, loginResult.User.SignInToken, loginResult.User.Id, loginResult.User.TenantId);
+                returnUrl = AddSingleSignInParametersToReturnUrl(model.ReturnUrl, loginResult.User.SignInToken,
+                    loginResult.User.Id, loginResult.User.TenantId);
             }
 
             //Password reset
@@ -152,9 +172,8 @@ namespace CoreOSR.Web.Controllers
                 return new AuthenticateResultModel
                 {
                     ShouldResetPassword = true,
-                    PasswordResetCode = loginResult.User.PasswordResetCode,
-                    UserId = loginResult.User.Id,
-                    ReturnUrl = returnUrl
+                    ReturnUrl = returnUrl,
+                    c = await EncryptQueryParameters(loginResult.User.Id, loginResult.Tenant.Id, loginResult.User.PasswordResetCode)
                 };
             }
 
@@ -167,9 +186,9 @@ namespace CoreOSR.Web.Controllers
                 if (model.TwoFactorVerificationCode.IsNullOrEmpty())
                 {
                     //Add a cache item which will be checked in SendTwoFactorAuthCode to prevent sending unwanted two factor code to users.
-                    _cacheManager
+                    await _cacheManager
                         .GetTwoFactorCodeCache()
-                        .Set(
+                        .SetAsync(
                             loginResult.User.ToUserIdentifier().ToString(),
                             new TwoFactorCodeCacheItem()
                         );
@@ -183,25 +202,37 @@ namespace CoreOSR.Web.Controllers
                     };
                 }
 
-                twoFactorRememberClientToken = await TwoFactorAuthenticateAsync(loginResult.User, model);
+                twoFactorRememberClientToken = await TwoFactorAuthenticateAsync(loginResult, model);
             }
 
             // One Concurrent Login 
             if (AllowOneConcurrentLoginPerUser())
             {
-                await _userManager.UpdateSecurityStampAsync(loginResult.User);
-                await _securityStampHandler.SetSecurityStampCacheItem(loginResult.User.TenantId, loginResult.User.Id, loginResult.User.SecurityStamp);
-                loginResult.Identity.ReplaceClaim(new Claim(AppConsts.SecurityStampKey, loginResult.User.SecurityStamp));
+                await ResetSecurityStampForLoginResult(loginResult);
             }
 
-            var accessToken = CreateAccessToken(await CreateJwtClaims(loginResult.Identity, loginResult.User));
-            var refreshToken = CreateRefreshToken(await CreateJwtClaims(loginResult.Identity, loginResult.User, tokenType: TokenType.RefreshToken));
+            var refreshToken = CreateRefreshToken(
+                await CreateJwtClaims(
+                    loginResult.Identity,
+                    loginResult.User,
+                    tokenType: TokenType.RefreshToken
+                )
+            );
+
+            var accessToken = CreateAccessToken(
+                await CreateJwtClaims(
+                    loginResult.Identity,
+                    loginResult.User,
+                    refreshTokenKey: refreshToken.key
+                )
+            );
 
             return new AuthenticateResultModel
             {
                 AccessToken = accessToken,
-                ExpireInSeconds = (int)_configuration.AccessTokenExpiration.TotalSeconds,
-                RefreshToken = refreshToken,
+                ExpireInSeconds = (int) _configuration.AccessTokenExpiration.TotalSeconds,
+                RefreshToken = refreshToken.token,
+                RefreshTokenExpireInSeconds = (int) _configuration.RefreshTokenExpiration.TotalSeconds,
                 EncryptedAccessToken = GetEncryptedAccessToken(accessToken),
                 TwoFactorRememberClientToken = twoFactorRememberClientToken,
                 UserId = loginResult.User.Id,
@@ -217,24 +248,40 @@ namespace CoreOSR.Web.Controllers
                 throw new ArgumentNullException(nameof(refreshToken));
             }
 
-            if (!IsRefreshTokenValid(refreshToken, out var principal))
+            var (isRefreshTokenValid, principal) = await IsRefreshTokenValid(refreshToken);
+            if (!isRefreshTokenValid)
             {
                 throw new ValidationException("Refresh token is not valid!");
             }
 
             try
             {
-                var user = _userManager.GetUser(UserIdentifier.Parse(principal.Claims.First(x => x.Type == AppConsts.UserIdentifier).Value));
+                var user = await _userManager.GetUserAsync(
+                    UserIdentifier.Parse(principal.Claims.First(x => x.Type == AppConsts.UserIdentifier).Value)
+                );
+
                 if (user == null)
                 {
                     throw new UserFriendlyException("Unknown user or user identifier");
                 }
 
+                if (AllowOneConcurrentLoginPerUser())
+                {
+                    await _userManager.UpdateSecurityStampAsync(user);
+                    await _securityStampHandler.SetSecurityStampCacheItem(user.TenantId, user.Id, user.SecurityStamp);
+                }
+
                 principal = await _claimsPrincipalFactory.CreateAsync(user);
 
-                var accessToken = CreateAccessToken(await CreateJwtClaims(principal.Identity as ClaimsIdentity, user));
+                var accessToken = CreateAccessToken(
+                    await CreateJwtClaims(principal.Identity as ClaimsIdentity, user)
+                );
 
-                return await Task.FromResult(new RefreshTokenResult(accessToken));
+                return await Task.FromResult(new RefreshTokenResult(
+                    accessToken,
+                    GetEncryptedAccessToken(accessToken),
+                    (int) _configuration.AccessTokenExpiration.TotalSeconds)
+                );
             }
             catch (UserFriendlyException)
             {
@@ -248,30 +295,43 @@ namespace CoreOSR.Web.Controllers
 
         private bool UseCaptchaOnLogin()
         {
-            if (DebugHelper.IsDebug)
-            {
-                return false;
-            }
-
             return SettingManager.GetSettingValue<bool>(AppSettings.UserManagement.UseCaptchaOnLogin);
         }
 
 
         [HttpGet]
-        [AbpAuthorize]
+        [AbpMvcAuthorize]
         public async Task LogOut()
         {
             if (AbpSession.UserId != null)
             {
                 var tokenValidityKeyInClaims = User.Claims.First(c => c.Type == AppConsts.TokenValidityKey);
-                await _userManager.RemoveTokenValidityKeyAsync(_userManager.GetUser(AbpSession.ToUserIdentifier()), tokenValidityKeyInClaims.Value);
-                _cacheManager.GetCache(AppConsts.TokenValidityKey).Remove(tokenValidityKeyInClaims.Value);
+                await RemoveTokenAsync(tokenValidityKeyInClaims.Value);
+
+                var refreshTokenValidityKeyInClaims =
+                    User.Claims.FirstOrDefault(c => c.Type == AppConsts.RefreshTokenValidityKey);
+                if (refreshTokenValidityKeyInClaims != null)
+                {
+                    await RemoveTokenAsync(refreshTokenValidityKeyInClaims.Value);
+                }
 
                 if (AllowOneConcurrentLoginPerUser())
                 {
-                    await _securityStampHandler.RemoveSecurityStampCacheItem(AbpSession.TenantId, AbpSession.GetUserId());
+                    await _securityStampHandler.RemoveSecurityStampCacheItem(
+                        AbpSession.TenantId,
+                        AbpSession.GetUserId()
+                    );
                 }
             }
+        }
+
+        private async Task RemoveTokenAsync(string tokenKey)
+        {
+            await _userManager.RemoveTokenValidityKeyAsync(
+                await _userManager.GetUserAsync(AbpSession.ToUserIdentifier()), tokenKey
+            );
+
+            await _cacheManager.GetCache(AppConsts.TokenValidityKey).RemoveAsync(tokenKey);
         }
 
         [HttpPost]
@@ -307,11 +367,12 @@ namespace CoreOSR.Web.Controllers
                 }
             }
 
-            _cacheManager.GetTwoFactorCodeCache().Set(
-                    cacheKey,
-                    cacheItem
-                );
-            _cacheManager.GetCache("ProviderCache").Set(
+            await _cacheManager.GetTwoFactorCodeCache().SetAsync(
+                cacheKey,
+                cacheItem
+            );
+
+            await _cacheManager.GetCache("ProviderCache").SetAsync(
                 "Provider",
                 model.Provider
             );
@@ -327,7 +388,31 @@ namespace CoreOSR.Web.Controllers
             {
                 AccessToken = accessToken,
                 EncryptedAccessToken = GetEncryptedAccessToken(accessToken),
-                ExpireInSeconds = (int)_configuration.AccessTokenExpiration.TotalSeconds
+                ExpireInSeconds = (int) _configuration.AccessTokenExpiration.TotalSeconds
+            };
+        }
+
+        [HttpPost]
+        public async Task<ImpersonatedAuthenticateResultModel> DelegatedImpersonatedAuthenticate(long userDelegationId,
+            string impersonationToken)
+        {
+            var result = await _impersonationManager.GetImpersonatedUserAndIdentity(impersonationToken);
+            var userDelegation = await _userDelegationManager.GetAsync(userDelegationId);
+
+            if (!userDelegation.IsCreatedByUser(result.User.Id))
+            {
+                throw new UserFriendlyException("User delegation error...");
+            }
+
+            var expiration = userDelegation.EndTime.Subtract(Clock.Now);
+            var accessToken = CreateAccessToken(await CreateJwtClaims(result.Identity, result.User, expiration),
+                expiration);
+
+            return new ImpersonatedAuthenticateResultModel
+            {
+                AccessToken = accessToken,
+                EncryptedAccessToken = GetEncryptedAccessToken(accessToken),
+                ExpireInSeconds = (int) expiration.TotalSeconds
             };
         }
 
@@ -341,84 +426,171 @@ namespace CoreOSR.Web.Controllers
             {
                 AccessToken = accessToken,
                 EncryptedAccessToken = GetEncryptedAccessToken(accessToken),
-                ExpireInSeconds = (int)_configuration.AccessTokenExpiration.TotalSeconds
+                ExpireInSeconds = (int) _configuration.AccessTokenExpiration.TotalSeconds
             };
         }
 
         [HttpGet]
         public List<ExternalLoginProviderInfoModel> GetExternalAuthenticationProviders()
         {
-            return ObjectMapper.Map<List<ExternalLoginProviderInfoModel>>(_externalAuthConfiguration.Providers);
+            var allProviders = _externalAuthConfiguration.ExternalLoginInfoProviders
+                .Select(infoProvider => infoProvider.GetExternalLoginInfo())
+                .Where(IsSchemeEnabledOnTenant)
+                .ToList();
+            return ObjectMapper.Map<List<ExternalLoginProviderInfoModel>>(allProviders);
+        }
+
+        private bool IsSchemeEnabledOnTenant(ExternalLoginProviderInfo scheme)
+        {
+            if (!AbpSession.TenantId.HasValue)
+            {
+                return true;
+            }
+
+            switch (scheme.Name)
+            {
+                case "OpenIdConnect":
+                    return !_settingManager.GetSettingValueForTenant<bool>(
+                        AppSettings.ExternalLoginProvider.Tenant.OpenIdConnect_IsDeactivated, AbpSession.GetTenantId());
+                case "Microsoft":
+                    return !_settingManager.GetSettingValueForTenant<bool>(
+                        AppSettings.ExternalLoginProvider.Tenant.Microsoft_IsDeactivated, AbpSession.GetTenantId());
+                case "Google":
+                    return !_settingManager.GetSettingValueForTenant<bool>(
+                        AppSettings.ExternalLoginProvider.Tenant.Google_IsDeactivated, AbpSession.GetTenantId());
+                case "Twitter":
+                    return !_settingManager.GetSettingValueForTenant<bool>(
+                        AppSettings.ExternalLoginProvider.Tenant.Twitter_IsDeactivated, AbpSession.GetTenantId());
+                case "Facebook":
+                    return !_settingManager.GetSettingValueForTenant<bool>(
+                        AppSettings.ExternalLoginProvider.Tenant.Facebook_IsDeactivated, AbpSession.GetTenantId());
+                case "WsFederation":
+                    return !_settingManager.GetSettingValueForTenant<bool>(
+                        AppSettings.ExternalLoginProvider.Tenant.WsFederation_IsDeactivated, AbpSession.GetTenantId());
+                default: return true;
+            }
         }
 
         [HttpPost]
-        public async Task<ExternalAuthenticateResultModel> ExternalAuthenticate([FromBody] ExternalAuthenticateModel model)
+        public async Task<ExternalAuthenticateResultModel> ExternalAuthenticate(
+            [FromBody] ExternalAuthenticateModel model)
         {
             var externalUser = await GetExternalUserInfo(model);
 
-            var loginResult = await _logInManager.LoginAsync(new UserLoginInfo(model.AuthProvider, model.ProviderKey, model.AuthProvider), GetTenancyNameOrNull());
+            var loginResult = await _logInManager.LoginAsync(
+                new UserLoginInfo(model.AuthProvider, externalUser.ProviderKey, model.AuthProvider),
+                GetTenancyNameOrNull()
+            );
 
             switch (loginResult.Result)
             {
                 case AbpLoginResultType.Success:
+                {
+                    // One Concurrent Login 
+                    if (AllowOneConcurrentLoginPerUser())
                     {
-                        var accessToken = CreateAccessToken(await CreateJwtClaims(loginResult.Identity, loginResult.User));
-
-                        var returnUrl = model.ReturnUrl;
-
-                        if (model.SingleSignIn.HasValue && model.SingleSignIn.Value && loginResult.Result == AbpLoginResultType.Success)
-                        {
-                            loginResult.User.SetSignInToken();
-                            returnUrl = AddSingleSignInParametersToReturnUrl(model.ReturnUrl, loginResult.User.SignInToken, loginResult.User.Id, loginResult.User.TenantId);
-                        }
-
-                        return new ExternalAuthenticateResultModel
-                        {
-                            AccessToken = accessToken,
-                            EncryptedAccessToken = GetEncryptedAccessToken(accessToken),
-                            ExpireInSeconds = (int)_configuration.AccessTokenExpiration.TotalSeconds,
-                            ReturnUrl = returnUrl
-                        };
+                        await ResetSecurityStampForLoginResult(loginResult);
                     }
+
+                    var refreshToken = CreateRefreshToken(
+                        await CreateJwtClaims(
+                            loginResult.Identity,
+                            loginResult.User,
+                            tokenType: TokenType.RefreshToken
+                        )
+                    );
+
+                    var accessToken = CreateAccessToken(
+                        await CreateJwtClaims(
+                            loginResult.Identity,
+                            loginResult.User,
+                            refreshTokenKey: refreshToken.key
+                        )
+                    );
+
+                    var returnUrl = model.ReturnUrl;
+
+                    if (model.SingleSignIn.HasValue && model.SingleSignIn.Value &&
+                        loginResult.Result == AbpLoginResultType.Success)
+                    {
+                        loginResult.User.SetSignInToken();
+                        returnUrl = AddSingleSignInParametersToReturnUrl(
+                            model.ReturnUrl,
+                            loginResult.User.SignInToken,
+                            loginResult.User.Id,
+                            loginResult.User.TenantId
+                        );
+                    }
+
+                    return new ExternalAuthenticateResultModel
+                    {
+                        AccessToken = accessToken,
+                        EncryptedAccessToken = GetEncryptedAccessToken(accessToken),
+                        ExpireInSeconds = (int) _configuration.AccessTokenExpiration.TotalSeconds,
+                        ReturnUrl = returnUrl,
+                        RefreshToken = refreshToken.token,
+                        RefreshTokenExpireInSeconds = (int) _configuration.RefreshTokenExpiration.TotalSeconds
+                    };
+                }
                 case AbpLoginResultType.UnknownExternalLogin:
+                {
+                    var newUser = await RegisterExternalUserAsync(externalUser);
+                    if (!newUser.IsActive)
                     {
-                        var newUser = await RegisterExternalUserAsync(externalUser);
-                        if (!newUser.IsActive)
-                        {
-                            return new ExternalAuthenticateResultModel
-                            {
-                                WaitingForActivation = true
-                            };
-                        }
-
-                        //Try to login again with newly registered user!
-                        loginResult = await _logInManager.LoginAsync(new UserLoginInfo(model.AuthProvider, model.ProviderKey, model.AuthProvider), GetTenancyNameOrNull());
-                        if (loginResult.Result != AbpLoginResultType.Success)
-                        {
-                            throw _abpLoginResultTypeHelper.CreateExceptionForFailedLoginAttempt(
-                                loginResult.Result,
-                                model.ProviderKey,
-                                GetTenancyNameOrNull()
-                            );
-                        }
-
-                        var accessToken = CreateAccessToken(await CreateJwtClaims(loginResult.Identity, loginResult.User));
                         return new ExternalAuthenticateResultModel
                         {
-                            AccessToken = accessToken,
-                            EncryptedAccessToken = GetEncryptedAccessToken(accessToken),
-                            ExpireInSeconds = (int)_configuration.AccessTokenExpiration.TotalSeconds
+                            WaitingForActivation = true
                         };
                     }
-                default:
+
+                    //Try to login again with newly registered user!
+                    loginResult = await _logInManager.LoginAsync(
+                        new UserLoginInfo(model.AuthProvider, model.ProviderKey, model.AuthProvider),
+                        GetTenancyNameOrNull()
+                    );
+
+                    if (loginResult.Result != AbpLoginResultType.Success)
                     {
                         throw _abpLoginResultTypeHelper.CreateExceptionForFailedLoginAttempt(
                             loginResult.Result,
-                            model.ProviderKey,
+                            externalUser.EmailAddress,
                             GetTenancyNameOrNull()
                         );
                     }
+
+                    var refreshToken = CreateRefreshToken(await CreateJwtClaims(loginResult.Identity,
+                        loginResult.User, tokenType: TokenType.RefreshToken)
+                    );
+
+                    var accessToken = CreateAccessToken(await CreateJwtClaims(loginResult.Identity,
+                        loginResult.User, refreshTokenKey: refreshToken.key));
+
+                    return new ExternalAuthenticateResultModel
+                    {
+                        AccessToken = accessToken,
+                        EncryptedAccessToken = GetEncryptedAccessToken(accessToken),
+                        ExpireInSeconds = (int) _configuration.AccessTokenExpiration.TotalSeconds,
+                        RefreshToken = refreshToken.token,
+                        RefreshTokenExpireInSeconds = (int) _configuration.RefreshTokenExpiration.TotalSeconds
+                    };
+                }
+                default:
+                {
+                    throw _abpLoginResultTypeHelper.CreateExceptionForFailedLoginAttempt(
+                        loginResult.Result,
+                        externalUser.EmailAddress,
+                        GetTenancyNameOrNull()
+                    );
+                }
             }
+        }
+
+        private async Task ResetSecurityStampForLoginResult(AbpLoginResult<Tenant, User> loginResult)
+        {
+            await _userManager.UpdateSecurityStampAsync(loginResult.User);
+            await _securityStampHandler.SetSecurityStampCacheItem(loginResult.User.TenantId, loginResult.User.Id,
+                loginResult.User.SecurityStamp);
+            loginResult.Identity.ReplaceClaim(new Claim(AppConsts.SecurityStampKey, loginResult.User.SecurityStamp));
         }
 
         #region Etc
@@ -436,7 +608,7 @@ namespace CoreOSR.Web.Controllers
                 AbpSession.ToUserIdentifier(),
                 message,
                 severity.ToPascalCase().ToEnum<NotificationSeverity>()
-                );
+            );
 
             return Content("Sent notification: " + message);
         }
@@ -447,7 +619,8 @@ namespace CoreOSR.Web.Controllers
         {
             string username;
 
-            using (var providerManager = _externalLoginInfoManagerFactory.GetExternalLoginInfoManager(externalLoginInfo.Provider))
+            using (var providerManager =
+                   _externalLoginInfoManagerFactory.GetExternalLoginInfoManager(externalLoginInfo.Provider))
             {
                 username = providerManager.Object.GetUserNameFromExternalAuthUserInfo(externalLoginInfo);
             }
@@ -480,7 +653,7 @@ namespace CoreOSR.Web.Controllers
         private async Task<ExternalAuthUserInfo> GetExternalUserInfo(ExternalAuthenticateModel model)
         {
             var userInfo = await _externalAuthManager.GetUserInfo(model.AuthProvider, model.ProviderAccessCode);
-            if (userInfo.ProviderKey != model.ProviderKey)
+            if (!ProviderKeysAreEqual(model, userInfo))
             {
                 throw new UserFriendlyException(L("CouldNotValidateExternalUser"));
             }
@@ -488,9 +661,23 @@ namespace CoreOSR.Web.Controllers
             return userInfo;
         }
 
-        private async Task<bool> IsTwoFactorAuthRequiredAsync(AbpLoginResult<Tenant, User> loginResult, AuthenticateModel authenticateModel)
+        private bool ProviderKeysAreEqual(ExternalAuthenticateModel model, ExternalAuthUserInfo userInfo)
         {
-            if (!await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement.TwoFactorLogin.IsEnabled))
+            if (userInfo.ProviderKey == model.ProviderKey)
+            {
+                return true;
+            }
+
+            ;
+
+            return userInfo.ProviderKey == model.ProviderKey.Replace("-", "").TrimStart('0');
+        }
+
+        private async Task<bool> IsTwoFactorAuthRequiredAsync(AbpLoginResult<Tenant, User> loginResult,
+            AuthenticateModel authenticateModel)
+        {
+            if (!await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement.TwoFactorLogin
+                    .IsEnabled))
             {
                 return false;
             }
@@ -513,9 +700,12 @@ namespace CoreOSR.Web.Controllers
             return true;
         }
 
-        private async Task<bool> TwoFactorClientRememberedAsync(UserIdentifier userIdentifier, AuthenticateModel authenticateModel)
+        private async Task<bool> TwoFactorClientRememberedAsync(UserIdentifier userIdentifier,
+            AuthenticateModel authenticateModel)
         {
-            if (!await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement.TwoFactorLogin.IsRememberBrowserEnabled))
+            if (!await SettingManager.GetSettingValueAsync<bool>(
+                    AbpZeroSettingNames.UserManagement.TwoFactorLogin.IsRememberBrowserEnabled)
+               )
             {
                 return false;
             }
@@ -534,20 +724,24 @@ namespace CoreOSR.Web.Controllers
                     IssuerSigningKey = _configuration.SecurityKey
                 };
 
-                foreach (var validator in _jwtOptions.Value.SecurityTokenValidators)
+                foreach (var validator in _jwtOptions.Value.AsyncSecurityTokenValidators)
                 {
                     if (validator.CanReadToken(authenticateModel.TwoFactorRememberClientToken))
                     {
                         try
                         {
-                            var principal = validator.ValidateToken(authenticateModel.TwoFactorRememberClientToken, validationParameters, out _);
-                            var useridentifierClaim = principal.FindFirst(c => c.Type == UserIdentifierClaimType);
-                            if (useridentifierClaim == null)
+                            var (principal, _) = await validator.ValidateToken(
+                                authenticateModel.TwoFactorRememberClientToken,
+                                validationParameters
+                            );
+
+                            var userIdentifierClaim = principal.FindFirst(c => c.Type == AppConsts.UserIdentifier);
+                            if (userIdentifierClaim == null)
                             {
                                 return false;
                             }
 
-                            return useridentifierClaim.Value == userIdentifier.ToString();
+                            return userIdentifierClaim.Value == userIdentifier.ToString();
                         }
                         catch (Exception ex)
                         {
@@ -565,16 +759,18 @@ namespace CoreOSR.Web.Controllers
         }
 
         /* Checkes two factor code and returns a token to remember the client (browser) if needed */
-        private async Task<string> TwoFactorAuthenticateAsync(User user, AuthenticateModel authenticateModel)
+        private async Task<string> TwoFactorAuthenticateAsync(AbpLoginResult<Tenant, User> loginResult,
+            AuthenticateModel authenticateModel)
         {
             var twoFactorCodeCache = _cacheManager.GetTwoFactorCodeCache();
-            var userIdentifier = user.ToUserIdentifier().ToString();
+            var userIdentifier = loginResult.User.ToUserIdentifier().ToString();
             var cachedCode = await twoFactorCodeCache.GetOrDefaultAsync(userIdentifier);
             var provider = _cacheManager.GetCache("ProviderCache").Get("Provider", cache => cache).ToString();
 
             if (provider == GoogleAuthenticatorProvider.Name)
             {
-                if (!await _googleAuthenticatorProvider.ValidateAsync("TwoFactor", authenticateModel.TwoFactorVerificationCode, _userManager, user))
+                if (!await _googleAuthenticatorProvider.ValidateAsync("TwoFactor",
+                        authenticateModel.TwoFactorVerificationCode, _userManager, loginResult.User))
                 {
                     throw new UserFriendlyException(L("InvalidSecurityCode"));
                 }
@@ -589,13 +785,14 @@ namespace CoreOSR.Web.Controllers
 
             if (authenticateModel.RememberClient)
             {
-                if (await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement.TwoFactorLogin.IsRememberBrowserEnabled))
+                if (await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement.TwoFactorLogin
+                        .IsRememberBrowserEnabled))
                 {
-                    return CreateAccessToken(new[]
-                        {
-                            new Claim(UserIdentifierClaimType, user.ToUserIdentifier().ToString())
-                        },
-                        TimeSpan.FromDays(365)
+                    return CreateAccessToken(
+                        await CreateJwtClaims(
+                            loginResult.Identity,
+                            loginResult.User
+                        )
                     );
                 }
             }
@@ -613,16 +810,24 @@ namespace CoreOSR.Web.Controllers
             return _tenantCache.GetOrNull(AbpSession.TenantId.Value)?.TenancyName;
         }
 
-        private async Task<AbpLoginResult<Tenant, User>> GetLoginResultAsync(string usernameOrEmailAddress, string password, string tenancyName)
+        private async Task<AbpLoginResult<Tenant, User>> GetLoginResultAsync(string usernameOrEmailAddress,
+            string password, string tenancyName)
         {
-            var loginResult = await _logInManager.LoginAsync(usernameOrEmailAddress, password, tenancyName);
+            var shouldLockout = await SettingManager.GetSettingValueAsync<bool>(
+                AbpZeroSettingNames.UserManagement.UserLockOut.IsEnabled
+            );
+            var loginResult = await _logInManager.LoginAsync(usernameOrEmailAddress, password, tenancyName, shouldLockout);
 
             switch (loginResult.Result)
             {
                 case AbpLoginResultType.Success:
                     return loginResult;
                 default:
-                    throw _abpLoginResultTypeHelper.CreateExceptionForFailedLoginAttempt(loginResult.Result, usernameOrEmailAddress, tenancyName);
+                    throw _abpLoginResultTypeHelper.CreateExceptionForFailedLoginAttempt(
+                        loginResult.Result,
+                        usernameOrEmailAddress,
+                        tenancyName
+                    );
             }
         }
 
@@ -631,9 +836,11 @@ namespace CoreOSR.Web.Controllers
             return CreateToken(claims, expiration ?? _configuration.AccessTokenExpiration);
         }
 
-        private string CreateRefreshToken(IEnumerable<Claim> claims)
+        private (string token, string key) CreateRefreshToken(IEnumerable<Claim> claims)
         {
-            return CreateToken(claims, AppConsts.RefreshTokenExpiration);
+            var claimsList = claims.ToList();
+            return (CreateToken(claimsList, AppConsts.RefreshTokenExpiration),
+                claimsList.First(c => c.Type == AppConsts.TokenValidityKey).Value);
         }
 
         private string CreateToken(IEnumerable<Claim> claims, TimeSpan? expiration = null)
@@ -646,9 +853,7 @@ namespace CoreOSR.Web.Controllers
                 claims: claims,
                 notBefore: now,
                 signingCredentials: _configuration.SigningCredentials,
-                expires: expiration == null ?
-                    (DateTime?)null :
-                    now.Add(expiration.Value)
+                expires: expiration == null ? (DateTime?) null : now.Add(expiration.Value)
             );
 
             return new JwtSecurityTokenHandler().WriteToken(jwtSecurityToken);
@@ -659,7 +864,11 @@ namespace CoreOSR.Web.Controllers
             return SimpleStringCipher.Instance.Encrypt(accessToken, AppConsts.DefaultPassPhrase);
         }
 
-        private async Task<IEnumerable<Claim>> CreateJwtClaims(ClaimsIdentity identity, User user, TimeSpan? expiration = null, TokenType tokenType = TokenType.AccessToken)
+        private async Task<IEnumerable<Claim>> CreateJwtClaims(
+            ClaimsIdentity identity, User user,
+            TimeSpan? expiration = null,
+            TokenType tokenType = TokenType.AccessToken,
+            string refreshTokenKey = null)
         {
             var tokenValidityKey = Guid.NewGuid().ToString();
             var claims = identity.Claims.ToList();
@@ -670,16 +879,20 @@ namespace CoreOSR.Web.Controllers
                 claims.Add(new Claim(JwtRegisteredClaimNames.Sub, nameIdClaim.Value));
             }
 
-            var userIdentifier = new UserIdentifier(AbpSession.TenantId, Convert.ToInt64(nameIdClaim.Value));
-
             claims.AddRange(new[]
             {
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.Now.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
+                new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.Now.ToUnixTimeSeconds().ToString(),
+                    ClaimValueTypes.Integer64),
                 new Claim(AppConsts.TokenValidityKey, tokenValidityKey),
-                new Claim(AppConsts.UserIdentifier, userIdentifier.ToUserIdentifierString()),
+                new Claim(AppConsts.UserIdentifier, user.ToUserIdentifier().ToUserIdentifierString()),
                 new Claim(AppConsts.TokenType, tokenType.To<int>().ToString())
-             });
+            });
+
+            if (!string.IsNullOrEmpty(refreshTokenKey))
+            {
+                claims.Add(new Claim(AppConsts.RefreshTokenValidityKey, refreshTokenKey));
+            }
 
             if (!expiration.HasValue)
             {
@@ -688,20 +901,23 @@ namespace CoreOSR.Web.Controllers
                     : _configuration.RefreshTokenExpiration;
             }
 
-            _cacheManager
+            var expirationDate = DateTime.UtcNow.Add(expiration.Value);
+
+            await _cacheManager
                 .GetCache(AppConsts.TokenValidityKey)
-                .Set(tokenValidityKey, "", absoluteExpireTime: expiration);
+                .SetAsync(tokenValidityKey, "", absoluteExpireTime: new DateTimeOffset(expirationDate));
 
             await _userManager.AddTokenValidityKeyAsync(
                 user,
                 tokenValidityKey,
-                DateTime.UtcNow.Add(expiration.Value)
+                expirationDate
             );
 
             return claims;
         }
 
-        private string AddSingleSignInParametersToReturnUrl(string returnUrl, string signInToken, long userId, int? tenantId)
+        private static string AddSingleSignInParametersToReturnUrl(string returnUrl, string signInToken, long userId,
+            int? tenantId)
         {
             returnUrl += (returnUrl.Contains("?") ? "&" : "?") +
                          "accessToken=" + signInToken +
@@ -715,9 +931,9 @@ namespace CoreOSR.Web.Controllers
         }
 
 
-        private bool IsRefreshTokenValid(string refreshToken, out ClaimsPrincipal principal)
+        private async Task<(bool isValid, ClaimsPrincipal principal)> IsRefreshTokenValid(string refreshToken)
         {
-            principal = null;
+            ClaimsPrincipal principal = null;
 
             try
             {
@@ -728,7 +944,7 @@ namespace CoreOSR.Web.Controllers
                     IssuerSigningKey = _configuration.SecurityKey
                 };
 
-                foreach (var validator in _jwtOptions.Value.SecurityTokenValidators)
+                foreach (var validator in _jwtOptions.Value.AsyncSecurityTokenValidators)
                 {
                     if (!validator.CanReadToken(refreshToken))
                     {
@@ -737,12 +953,8 @@ namespace CoreOSR.Web.Controllers
 
                     try
                     {
-                        principal = validator.ValidateToken(refreshToken, validationParameters, out _);
-
-                        if (principal.Claims.FirstOrDefault(x => x.Type == AppConsts.TokenType)?.Value == TokenType.RefreshToken.To<int>().ToString())
-                        {
-                            return true;
-                        }
+                        (principal, _) = await validator.ValidateRefreshToken(refreshToken, validationParameters);
+                        return (true, principal);
                     }
                     catch (Exception ex)
                     {
@@ -755,7 +967,7 @@ namespace CoreOSR.Web.Controllers
                 Logger.Debug(ex.ToString(), ex);
             }
 
-            return false;
+            return (false, principal);
         }
 
 
@@ -767,7 +979,8 @@ namespace CoreOSR.Web.Controllers
         private async Task ValidateReCaptcha(string captchaResponse)
         {
             var requestUserAgent = Request.Headers["User-Agent"].ToString();
-            if (!requestUserAgent.IsNullOrWhiteSpace() && WebConsts.ReCaptchaIgnoreWhiteList.Contains(requestUserAgent.Trim()))
+            if (!requestUserAgent.IsNullOrWhiteSpace() &&
+                WebConsts.ReCaptchaIgnoreWhiteList.Contains(requestUserAgent.Trim()))
             {
                 return;
             }

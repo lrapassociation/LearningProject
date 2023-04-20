@@ -8,11 +8,13 @@ namespace CoreOSR.DemoUiComponents
 {
     public interface IDemoUiComponentsAppService: IApplicationService
     {
-        DateToStringOutput SendAndGetDate(DateTime? date);
+        DateFieldOutput SendAndGetDate(DateTime date);
 
-        DateToStringOutput SendAndGetDateTime(DateTime? date);
+        DateFieldOutput SendAndGetDateTime(DateTime date);
 
-        DateToStringOutput SendAndGetDateRange(DateTime? startDate, DateTime? endDate);
+        DateRangeFieldOutput SendAndGetDateRange(DateTime startDate, DateTime endDate);
+
+        DateWithTextFieldOutput SendAndGetDateWithText(SendAndGetDateWithTextInput input);
 
         List<NameValue<string>> GetCountries(string searchTerm);
 

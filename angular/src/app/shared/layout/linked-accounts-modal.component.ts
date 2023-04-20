@@ -1,25 +1,24 @@
-import { AbpMultiTenancyService } from '@abp/multi-tenancy/abp-multi-tenancy.service';
+import { AbpMultiTenancyService } from 'abp-ng2-module';
 import { Component, EventEmitter, Injector, Output, ViewChild } from '@angular/core';
 import { LinkedAccountService } from '@app/shared/layout/linked-account.service';
 import { AppComponentBase } from '@shared/common/app-component-base';
 import { LinkedUserDto, UnlinkUserInput, UserLinkServiceProxy } from '@shared/service-proxies/service-proxies';
-import { ModalDirective } from 'ngx-bootstrap';
-import { LazyLoadEvent } from 'primeng/components/common/lazyloadevent';
-import { Paginator } from 'primeng/components/paginator/paginator';
-import { Table } from 'primeng/components/table/table';
+import { ModalDirective } from 'ngx-bootstrap/modal';
+import { LazyLoadEvent } from 'primeng/api';
+import { Paginator } from 'primeng/paginator';
+import { Table } from 'primeng/table';
 import { LinkAccountModalComponent } from './link-account-modal.component';
 import { finalize } from 'rxjs/operators';
 
 @Component({
     selector: 'linkedAccountsModal',
-    templateUrl: './linked-accounts-modal.component.html'
+    templateUrl: './linked-accounts-modal.component.html',
 })
 export class LinkedAccountsModalComponent extends AppComponentBase {
-
-    @ViewChild('linkedAccountsModal', {static: true}) modal: ModalDirective;
-    @ViewChild('linkAccountModal', {static: true}) linkAccountModal: LinkAccountModalComponent;
-    @ViewChild('dataTable', {static: true}) dataTable: Table;
-    @ViewChild('paginator', {static: true}) paginator: Paginator;
+    @ViewChild('linkedAccountsModal', { static: true }) modal: ModalDirective;
+    @ViewChild('linkAccountModal', { static: true }) linkAccountModal: LinkAccountModalComponent;
+    @ViewChild('dataTable', { static: true }) dataTable: Table;
+    @ViewChild('paginator', { static: true }) paginator: Paginator;
 
     @Output() modalClose: EventEmitter<any> = new EventEmitter<any>();
 
@@ -35,15 +34,18 @@ export class LinkedAccountsModalComponent extends AppComponentBase {
     getLinkedUsers(event?: LazyLoadEvent) {
         this.primengTableHelper.showLoadingIndicator();
 
-        this._userLinkService.getLinkedUsers(
-            this.primengTableHelper.getMaxResultCount(this.paginator, event),
-            this.primengTableHelper.getSkipCount(this.paginator, event),
-            this.primengTableHelper.getSorting(this.dataTable)
-        ).pipe(finalize(() => this.primengTableHelper.hideLoadingIndicator())).subscribe(result => {
-            this.primengTableHelper.totalRecordsCount = result.totalCount;
-            this.primengTableHelper.records = result.items;
-            this.primengTableHelper.hideLoadingIndicator();
-        });
+        this._userLinkService
+            .getLinkedUsers(
+                this.primengTableHelper.getMaxResultCount(this.paginator, event),
+                this.primengTableHelper.getSkipCount(this.paginator, event),
+                this.primengTableHelper.getSorting(this.dataTable)
+            )
+            .pipe(finalize(() => this.primengTableHelper.hideLoadingIndicator()))
+            .subscribe((result) => {
+                this.primengTableHelper.totalRecordsCount = result.totalCount;
+                this.primengTableHelper.records = result.items;
+                this.primengTableHelper.hideLoadingIndicator();
+            });
     }
 
     getShownLinkedUserName(linkedUser: LinkedUserDto): string {
@@ -58,7 +60,7 @@ export class LinkedAccountsModalComponent extends AppComponentBase {
         this.message.confirm(
             this.l('LinkedUserDeleteWarningMessage', linkedUser.username),
             this.l('AreYouSure'),
-            isConfirmed => {
+            (isConfirmed) => {
                 if (isConfirmed) {
                     const unlinkUserInput = new UnlinkUserInput();
                     unlinkUserInput.userId = linkedUser.id;

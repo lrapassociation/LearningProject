@@ -17,3 +17,8 @@ aspnet-core/DeleteBinsAndObjs.bat
 aspnet-core/src/CoreOSR.Web.Host/healthchecksdb
 aspnet-core/src/CoreOSR.Web.Public/healthchecksdb
 aspnet-core/src/CoreOSR.Web.Mvc/healthchecksdb
+*.pfx
+
+# Ingore excel backup of audit logs
+aspnet-core/src/CoreOSR.Web.Mvc/App_Data/AuditLogsBackups/*
+aspnet-core/src/CoreOSR.Web.Host/App_Data/AuditLogsBackups/*

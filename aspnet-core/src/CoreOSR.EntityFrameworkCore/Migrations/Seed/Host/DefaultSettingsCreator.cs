@@ -21,10 +21,13 @@ namespace CoreOSR.Migrations.Seed.Host
         {
             int? tenantId = null;
 
-            if (CoreOSRConsts.MultiTenancyEnabled == false)
+            // ReSharper disable once ConditionIsAlwaysTrueOrFalse
+            if (!CoreOSRConsts.MultiTenancyEnabled)
+#pragma warning disable 162
             {
                 tenantId = MultiTenancyConsts.DefaultTenantId;
             }
+#pragma warning restore 162
 
             //Emailing
             AddSettingIfNotExists(EmailSettingNames.DefaultFromAddress, "admin@mydomain.com", tenantId);

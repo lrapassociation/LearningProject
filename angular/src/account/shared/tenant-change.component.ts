@@ -5,24 +5,32 @@ import { TenantChangeModalComponent } from './tenant-change-modal.component';
 
 @Component({
     selector: 'tenant-change',
-    template:
-    `<span *ngIf="isMultiTenancyEnabled">
-        {{"CurrentTenant" | localize}}: <span *ngIf="tenancyName" title="{{name}}"><strong>{{tenancyName}}</strong></span> <span *ngIf="!tenancyName">{{"NotSelected" | localize}}</span> (<a href="javascript:;" (click)="showChangeModal()">{{l("Change")}}</a>)
-        <tenantChangeModal #tenantChangeModal></tenantChangeModal>
-    </span>`
+    template: `
+        <span *ngIf="isMultiTenancyEnabled">
+            {{ 'CurrentTenant' | localize }}:
+            <span *ngIf="tenancyName" title="{{ name }}">
+                <strong>{{ tenancyName }}</strong>
+            </span>
+            <span *ngIf="!tenancyName">{{ 'NotSelected' | localize }}</span>
+            (
+            <a href="javascript:;" (click)="showChangeModal()">{{ l('Change') }}</a>
+            )
+            <tenantChangeModal #tenantChangeModal></tenantChangeModal>
+        </span>
+    `,
 })
 export class TenantChangeComponent extends AppComponentBase implements OnInit {
-
-    @ViewChild('tenantChangeModal', {static: false}) tenantChangeModal: TenantChangeModalComponent;
+    @ViewChild('tenantChangeModal') tenantChangeModal: TenantChangeModalComponent;
 
     tenancyName: string;
     name: string;
 
-    constructor(
-        injector: Injector,
-        private _accountService: AccountServiceProxy
-        ) {
+    constructor(injector: Injector, private _accountService: AccountServiceProxy) {
         super(injector);
+    }
+
+    get isMultiTenancyEnabled(): boolean {
+        return abp.multiTenancy.isEnabled;
     }
 
     ngOnInit() {
@@ -30,10 +38,6 @@ export class TenantChangeComponent extends AppComponentBase implements OnInit {
             this.tenancyName = this.appSession.tenant.tenancyName;
             this.name = this.appSession.tenant.name;
         }
-    }
-
-    get isMultiTenancyEnabled(): boolean {
-        return abp.multiTenancy.isEnabled;
     }
 
     showChangeModal(): void {

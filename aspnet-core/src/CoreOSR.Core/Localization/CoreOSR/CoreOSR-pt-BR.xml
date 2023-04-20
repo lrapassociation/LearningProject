@@ -180,7 +180,6 @@
     <text name="RequestedFileDoesNotExists">Arquivo solicitado não existe!</text>
     <text name="MailSent">Email enviado</text>
     <text name="PasswordResetMailSentMessage">Um link de redefinição de senha enviada para seu endereço de e-mail. Por favor, verifique seu e-mail.</text>
-    <text name="ActivationMailSentMessage">Um link de ativação e-mail enviado para seu endereço de e-mail. Por favor, verifique seu e-mail.</text>
     <text name="UseCaptchaOnRegistration">Usar a pergunta na imagem de segurança (captcha) no registro.</text>
     <text name="FormBasedRegistration">Baseado em Formulário de Inscrição</text>
     <text name="LdapSettings">Configurações LDAP</text>
@@ -260,7 +259,6 @@
     <text name="Language">Idioma</text>
     <text name="Flag">Bandeira</text>
     <text name="SetAsDefaultLanguage">Marcar como idioma padrão</text>
-    <text name="InvlalidLanguageCode">Código de idioma inválido.</text>
     <text name="EditLanguage">Editar idioma</text>
     <text name="ChangeTexts">Mudar textos</text>
     <text name="TargetValue">Valor alvo</text>
@@ -340,7 +338,7 @@
     <text name="NotificationTypes">Tipos de notificação</text>
     <text name="ReceiveNotifications_DisableInfo">Você desabilitou o recebimento de todas notificações. Você pode rehabilitar e selecionar quais os tipos de notificação deseja receber.</text>
     <text name="Notifications">Notificações</text>
-    <text name="ThereIsNoNotification">Não existem notificações.</text>
+    <text name="ThereAreNoNotifications">Não existem notificações.</text>
     <text name="Unread">Não lida</text>
     <text name="YouCanNotDeleteOwnAccount">Você não pode deletar sua própria conta de usuário!</text>
     <text name="On">Ligado</text>

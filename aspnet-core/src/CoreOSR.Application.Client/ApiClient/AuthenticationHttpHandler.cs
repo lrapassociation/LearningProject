@@ -15,7 +15,7 @@ namespace CoreOSR.ApiClient
 
         public Func<Task> OnSessionTimeOut { get; set; }
 
-        public Func<string, Task> OnAccessTokenRefresh { get; set; }
+        public Func<string, string, Task> OnAccessTokenRefresh { get; set; }
 
         public AuthenticationHttpHandler(HttpMessageHandler innerHandler) :
             base(innerHandler)
@@ -28,7 +28,7 @@ namespace CoreOSR.ApiClient
         {
             var response = await base.SendAsync(request, cancellationToken);
 
-            if (response.StatusCode == HttpStatusCode.Unauthorized && 
+            if (response.StatusCode == HttpStatusCode.Unauthorized &&
                 HasBearerAuthorizationHeader(request))
             {
                 return await HandleUnauthorizedResponse(request, response, cancellationToken);
@@ -80,14 +80,14 @@ namespace CoreOSR.ApiClient
 
         private async Task RefreshToken(IAccessTokenManager tokenManager, HttpRequestMessage request)
         {
-            var newAccessToken = await tokenManager.RefreshTokenAsync();
+            var newTokens = await tokenManager.RefreshTokenAsync();
 
             if (OnAccessTokenRefresh != null)
             {
-                await OnAccessTokenRefresh(newAccessToken);
+                await OnAccessTokenRefresh(newTokens.accessToken, newTokens.encryptedAccessToken);
             }
 
-            SetRequestAccessToken(newAccessToken, request);
+            SetRequestAccessToken(newTokens.accessToken, request);
         }
 
         private static bool HasBearerAuthorizationHeader(HttpRequestMessage request)

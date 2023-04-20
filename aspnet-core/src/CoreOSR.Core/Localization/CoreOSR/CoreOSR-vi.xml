@@ -180,7 +180,6 @@
     <text name="RequestedFileDoesNotExists">Tập tin được yêu cầu không tồn tại!</text>
     <text name="MailSent">Thư đã gửi</text>
     <text name="PasswordResetMailSentMessage">Liên kết đặt lại mật khẩu được gửi đến địa chỉ email của bạn. Vui lòng kiểm tra email của bạn.</text>
-    <text name="ActivationMailSentMessage">Một liên kết kích hoạt e-mail được gửi đến địa chỉ e-mail của bạn. Vui lòng kiểm tra email của bạn.</text>
     <text name="UseCaptchaOnRegistration">Sử dụng câu hỏi hình ảnh bảo mật (captcha) khi đăng ký.</text>
     <text name="FormBasedRegistration">Đăng ký dựa trên biểu mẫu</text>
     <text name="LdapSettings">Cài đặt LDAP</text>
@@ -260,7 +259,6 @@
     <text name="Language">Ngôn ngữ</text>
     <text name="Flag">Cờ</text>
     <text name="SetAsDefaultLanguage">Đặt làm ngôn ngữ mặc định</text>
-    <text name="InvlalidLanguageCode">Mã ngôn ngữ không hợp lệ.</text>
     <text name="EditLanguage">Chỉnh sửa ngôn ngữ</text>
     <text name="ChangeTexts">Thay đổi văn bản</text>
     <text name="TargetValue">Giá trị của mục tiêu</text>
@@ -339,7 +337,7 @@
     <text name="NotificationTypes">Loại thông báo</text>
     <text name="ReceiveNotifications_DisableInfo">Bạn đã tắt hoàn toàn nhận thông báo. Bạn có thể bật nó và chọn loại thông báo bạn muốn nhận.</text>
     <text name="Notifications">Thông báo</text>
-    <text name="ThereIsNoNotification">Không có thông báo.</text>
+    <text name="ThereAreNoNotifications">Không có thông báo.</text>
     <text name="Unread">Chưa đọc</text>
     <text name="YouCanNotDeleteOwnAccount">Bạn không thể xóa tài khoản người dùng riêng!</text>
     <text name="On">Bật</text>
@@ -450,7 +448,7 @@
     <text name="Unlock">Mở khóa</text>
     <text name="UnlockedTheUser">Đã mở khóa người dùng {0}</text>
     <text name="UserLockOut">Khóa người dùng</text>
-    <text name="EnableUserAccountLockingOnFailedLoginAttemts">Bật chức năng Khóa tài khoản người dùng dựa trên số lần đăng nhập thất bại</text>
+    <text name="EnableUserAccountLockingOnFailedLoginAttempts">Bật chức năng Khóa tài khoản người dùng dựa trên số lần đăng nhập thất bại</text>
     <text name="MaxFailedAccessAttemptsBeforeLockout">Số lần đăng nhập thất bại tối đa cho phép trước khi khóa tài khoản</text>
     <text name="DefaultAccountLockoutDurationAsSeconds">Thời giản khóa tài khoản (tính bằng giây)</text>
     <text name="TwoFactorLogin">Bảo mật 2 lớp</text>

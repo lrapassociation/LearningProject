@@ -22,21 +22,28 @@ namespace CoreOSR.MultiTenancy.Payments
 
         public async Task<SubscriptionPayment> GetLastCompletedPaymentOrDefaultAsync(int tenantId, SubscriptionPaymentGatewayType? gateway, bool? isRecurring)
         {
-            return await GetAll()
-                .Where(p=> p.TenantId == tenantId)
-                .Where(p => p.Status == SubscriptionPaymentStatus.Completed)
-                .WhereIf(gateway.HasValue, p => p.Gateway == gateway.Value)
-                .WhereIf(isRecurring.HasValue, p => p.IsRecurring == isRecurring.Value)
-                .LastOrDefaultAsync();
+            var query = await GetAllAsync();
+            return (await query
+                    .Where(p => p.TenantId == tenantId)
+                    .Where(p => p.Status == SubscriptionPaymentStatus.Completed)
+                    .WhereIf(gateway.HasValue, p => p.Gateway == gateway.Value)
+                    .WhereIf(isRecurring.HasValue, p => p.IsRecurring == isRecurring.Value)
+                    .ToListAsync()
+                )
+                .OrderByDescending(x => x.Id)
+                .FirstOrDefault();
         }
 
         public async Task<SubscriptionPayment> GetLastPaymentOrDefaultAsync(int tenantId, SubscriptionPaymentGatewayType? gateway, bool? isRecurring)
         {
-            return await GetAll()
-                .Where(p=> p.TenantId == tenantId)
-                .WhereIf(gateway.HasValue, p => p.Gateway == gateway.Value)
-                .WhereIf(isRecurring.HasValue, p => p.IsRecurring == isRecurring.Value)
-                .LastOrDefaultAsync();
+            var query = await GetAllAsync();
+            return (await query 
+                    .Where(p => p.TenantId == tenantId)
+                    .WhereIf(gateway.HasValue, p => p.Gateway == gateway.Value)
+                    .WhereIf(isRecurring.HasValue, p => p.IsRecurring == isRecurring.Value)
+                    .ToListAsync()).OrderByDescending(x => x.Id
+                )
+                .FirstOrDefault();
         }
     }
 }

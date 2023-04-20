@@ -1,49 +1,37 @@
-import { PermissionCheckerService } from '@abp/auth/permission-checker.service';
-import { Injector, ElementRef, Component, OnInit, ViewEncapsulation, Inject, Renderer2, ChangeDetectionStrategy } from '@angular/core';
+import { PermissionCheckerService } from 'abp-ng2-module';
+import {
+    Injector,
+    ElementRef,
+    Component,
+    OnInit,
+    ViewEncapsulation,
+    Renderer2,
+    AfterViewInit,
+    Input,
+} from '@angular/core';
 import { AppComponentBase } from '@shared/common/app-component-base';
 import { AppMenu } from './app-menu';
 import { AppNavigationService } from './app-navigation.service';
-import { DOCUMENT } from '@angular/common';
-import { NavigationEnd, Router } from '@angular/router';
+import { NavigationEnd, NavigationCancel, Router } from '@angular/router';
 import { filter } from 'rxjs/operators';
-import { MenuOptions } from '@metronic/app/core/_base/layout/directives/menu.directive';
+import { FormattedStringValueExtracter } from '@shared/helpers/FormattedStringValueExtracter';
+import * as objectPath from 'object-path';
+import { AppMenuItem } from './app-menu-item';
+import { MenuComponent, DrawerComponent, ToggleComponent, ScrollComponent } from '@metronic/app/kt/components';
 
 @Component({
     templateUrl: './side-bar-menu.component.html',
     selector: 'side-bar-menu',
     encapsulation: ViewEncapsulation.None,
-    changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class SideBarMenuComponent extends AppComponentBase implements OnInit {
+export class SideBarMenuComponent extends AppComponentBase implements OnInit, AfterViewInit {
+    @Input() iconMenu = false;
+    @Input() menuClass = 'menu menu-column menu-rounded menu-sub-indention px-3';
 
     menu: AppMenu = null;
-
     currentRouteUrl = '';
     insideTm: any;
     outsideTm: any;
-
-    menuOptions: MenuOptions = {
-        // vertical scroll
-        scroll: null,
-
-        // submenu setup
-        submenu: {
-            desktop: {
-                default: 'dropdown',
-                state: {
-                    body: 'kt-aside--minimize',
-                    mode: 'dropdown'
-                }
-            },
-            tablet: 'accordion', // menu set to accordion in tablet mode
-            mobile: 'accordion' // menu set to accordion in mobile mode
-        },
-
-        // accordion setup
-        accordion: {
-            expandAll: false // allow having multiple expanded accordions in the menu
-        }
-    };
 
     constructor(
         injector: Injector,
@@ -51,8 +39,8 @@ export class SideBarMenuComponent extends AppComponentBase implements OnInit {
         private router: Router,
         public permission: PermissionCheckerService,
         private _appNavigationService: AppNavigationService,
-        @Inject(DOCUMENT) private document: Document,
-        private render: Renderer2) {
+        private render: Renderer2
+    ) {
         super(injector);
     }
 
@@ -62,8 +50,30 @@ export class SideBarMenuComponent extends AppComponentBase implements OnInit {
         this.currentRouteUrl = this.router.url.split(/[?#]/)[0];
 
         this.router.events
-            .pipe(filter(event => event instanceof NavigationEnd))
-            .subscribe(event => this.currentRouteUrl = this.router.url.split(/[?#]/)[0]);
+            .pipe(filter((event) => event instanceof NavigationEnd))
+            .subscribe((event) => (this.currentRouteUrl = this.router.url.split(/[?#]/)[0]));
+
+        this.router.events
+            .pipe(filter((event) => event instanceof NavigationEnd || event instanceof NavigationCancel))
+            .subscribe((event) => {
+                this.reinitializeMenu();
+            });
+    }
+
+    ngAfterViewInit(): void {
+        this.scrollToCurrentMenuElement();
+    }
+
+    reinitializeMenu(): void {
+        this.menu = this._appNavigationService.getMenu();
+        this.currentRouteUrl = this.router.url.split(/[?#]/)[0];
+
+        setTimeout(() => {
+            MenuComponent.reinitialization();
+            DrawerComponent.reinitialization();
+            ToggleComponent.reinitialization();
+            ScrollComponent.reinitialization();
+        }, 50);
     }
 
     showMenuItem(menuItem): boolean {
@@ -79,12 +89,18 @@ export class SideBarMenuComponent extends AppComponentBase implements OnInit {
             return false;
         }
 
-        // dashboard
-        if (item.route !== '/' && this.currentRouteUrl.startsWith(item.route)) {
-            return true;
+        let urlTree = this.router.parseUrl(this.currentRouteUrl.replace(/\/$/, ''));
+        let urlString = '/' + urlTree.root.children.primary.segments.map((segment) => segment.path).join('/');
+        let exactMatch = urlString === item.route.replace(/\/$/, '');
+        if (!exactMatch && item.routeTemplates) {
+            for (let i = 0; i < item.routeTemplates.length; i++) {
+                let result = new FormattedStringValueExtracter().Extract(urlString, item.routeTemplates[i]);
+                if (result.IsMatch) {
+                    return true;
+                }
+            }
         }
-
-        return this.currentRouteUrl.replace(/\/$/, '') === item.route.replace(/\/$/, '');
+        return exactMatch;
     }
 
     isMenuRootItemIsActive(item): boolean {
@@ -100,56 +116,59 @@ export class SideBarMenuComponent extends AppComponentBase implements OnInit {
         return false;
     }
 
-    /**
-	 * Use for fixed left aside menu, to show menu on mouseenter event.
-	 * @param e Event
-	 */
-    mouseEnter(e: Event) {
-        if (!this.currentTheme.baseSettings.menu.allowAsideMinimizing) {
-            return;
-        }
-
-        // check if the left aside menu is fixed
-        if (document.body.classList.contains('kt-aside--fixed')) {
-            if (this.outsideTm) {
-                clearTimeout(this.outsideTm);
-                this.outsideTm = null;
-            }
-
-            this.insideTm = setTimeout(() => {
-                // if the left aside menu is minimized
-                if (document.body.classList.contains('kt-aside--minimize') && KTUtil.isInResponsiveRange('desktop')) {
-                    // show the left aside menu
-                    this.render.removeClass(document.body, 'kt-aside--minimize');
-                    this.render.addClass(document.body, 'kt-aside--minimize-hover');
-                }
-            }, 50);
+    scrollToCurrentMenuElement(): void {
+        const path = location.pathname;
+        const menuItem = document.querySelector('a[href=\'' + path + '\']');
+        if (menuItem) {
+            menuItem.scrollIntoView({ block: 'center' });
         }
     }
 
-    /**
-     * Use for fixed left aside menu, to show menu on mouseenter event.
-     * @param e Event
-     */
-    mouseLeave(e: Event) {
-        if (!this.currentTheme.baseSettings.menu.allowAsideMinimizing) {
-            return;
-        }
+    getItemCssClasses(item: AppMenuItem, parentItem: AppMenuItem) {
+        let classes = 'menu-item';
 
-        if (document.body.classList.contains('kt-aside--fixed')) {
-            if (this.insideTm) {
-                clearTimeout(this.insideTm);
-                this.insideTm = null;
-            }
-
-            this.outsideTm = setTimeout(() => {
-                // if the left aside menu is expand
-                if (document.body.classList.contains('kt-aside--minimize-hover') && KTUtil.isInResponsiveRange('desktop')) {
-                    // hide back the left aside menu
-                    this.render.removeClass(document.body, 'kt-aside--minimize-hover');
-                    this.render.addClass(document.body, 'kt-aside--minimize');
+        if (item.items.length) {
+            if (!this.iconMenu) {
+                classes += ' menu-accordion';
+            } else {
+                if (parentItem == null) {
+                    classes += ' menu-dropdown';
+                } else {
+                    classes += ' menu-accordion';
                 }
-            }, 100);
+            }
         }
+
+        // custom class for menu item
+        const customClass = objectPath.get(item, 'custom-class');
+        if (customClass) {
+            classes += ' ' + customClass;
+        }
+
+        if (this.iconMenu && parentItem == null) {
+            classes += ' pb-3';
+        }
+
+        if (!this.iconMenu && this.isMenuItemIsActive(item)) {
+            classes += ' show';
+        }
+
+        return classes;
+    }
+
+    getSubMenuItemCssClass(item: AppMenuItem, parentItem: AppMenuItem): string {
+        let classes = 'menu-sub';
+
+        if (!this.iconMenu) {
+            classes += ' menu-sub-accordion';
+        } else {
+            if (parentItem == null) {
+                classes += ' menu-sub-dropdown px-1 py-4';
+            } else {
+                classes += ' menu-sub-accordion';
+            }
+        }
+
+        return classes;
     }
 }

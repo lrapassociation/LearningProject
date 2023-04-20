@@ -6,15 +6,12 @@ import { ThemeSettingsDto, UiCustomizationSettingsServiceProxy } from '@shared/s
 @Component({
     templateUrl: './default-theme-ui-settings.component.html',
     animations: [appModuleAnimation()],
-    selector: 'default-theme-ui-settings'
+    selector: 'default-theme-ui-settings',
 })
 export class DefaultThemeUiSettingsComponent extends AppComponentBase {
     @Input() settings: ThemeSettingsDto;
 
-    constructor(
-        injector: Injector,
-        private _uiCustomizationService: UiCustomizationSettingsServiceProxy
-    ) {
+    constructor(injector: Injector, private _uiCustomizationService: UiCustomizationSettingsServiceProxy) {
         super(injector);
     }
 
@@ -25,15 +22,19 @@ export class DefaultThemeUiSettingsComponent extends AppComponentBase {
     }
 
     updateDefaultUiManagementSettings(): void {
-        this._uiCustomizationService.updateDefaultUiManagementSettings(this.getCustomizedSetting(this.settings)).subscribe(() => {
-            window.location.reload();
-        });
+        this._uiCustomizationService
+            .updateDefaultUiManagementSettings(this.getCustomizedSetting(this.settings))
+            .subscribe(() => {
+                window.location.reload();
+            });
     }
 
     updateUiManagementSettings(): void {
-        this._uiCustomizationService.updateUiManagementSettings(this.getCustomizedSetting(this.settings)).subscribe(() => {
-            window.location.reload();
-        });
+        this._uiCustomizationService
+            .updateUiManagementSettings(this.getCustomizedSetting(this.settings))
+            .subscribe(() => {
+                window.location.reload();
+            });
     }
 
     useSystemDefaultSettings(): void {
@@ -45,6 +46,8 @@ export class DefaultThemeUiSettingsComponent extends AppComponentBase {
     allowAsideMinimizingChange(val): void {
         if (!val) {
             this.settings.menu.defaultMinimizedAside = false;
+        }else{
+            this.settings.menu.hoverableAside = true;
         }
     }
 }

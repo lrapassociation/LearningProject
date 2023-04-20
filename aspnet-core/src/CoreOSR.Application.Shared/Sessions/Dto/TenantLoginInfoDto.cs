@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Abp.Application.Services.Dto;
 using Abp.Timing;
 using CoreOSR.MultiTenancy.Payments;
@@ -11,9 +12,13 @@ namespace CoreOSR.Sessions.Dto
 
         public string Name { get; set; }
 
-        public Guid? LogoId { get; set; }
+        public virtual Guid? DarkLogoId { get; set; }
 
-        public string LogoFileType { get; set; }
+        public virtual string DarkLogoFileType { get; set; }
+        
+        public virtual Guid? LightLogoId { get; set; }
+
+        public virtual string LightLogoFileType { get; set; }
 
         public Guid? CustomCssId { get; set; }
 
@@ -24,6 +29,8 @@ namespace CoreOSR.Sessions.Dto
         public SubscriptionPaymentType SubscriptionPaymentType { get; set; }
 
         public EditionInfoDto Edition { get; set; }
+        
+        public List<NameValueDto> FeatureValues { get; set; }
 
         public DateTime CreationTime { get; set; }
 
@@ -33,6 +40,11 @@ namespace CoreOSR.Sessions.Dto
 
         public string CreationTimeString { get; set; }
 
+        public TenantLoginInfoDto()
+        {
+            FeatureValues = new List<NameValueDto>();
+        }
+        
         public bool IsInTrial()
         {
             return IsInTrialPeriod;
@@ -61,6 +73,12 @@ namespace CoreOSR.Sessions.Dto
         public bool HasRecurringSubscription()
         {
             return SubscriptionPaymentType != SubscriptionPaymentType.Manual;
+        }
+        
+        public virtual bool HasLogo()
+        {
+            return (DarkLogoId != null && DarkLogoFileType != null) ||
+                   (LightLogoId != null && LightLogoFileType != null);
         }
     }
 }

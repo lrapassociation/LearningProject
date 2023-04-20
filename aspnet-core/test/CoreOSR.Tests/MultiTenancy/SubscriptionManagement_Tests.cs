@@ -31,15 +31,30 @@ namespace CoreOSR.Tests.MultiTenancy
         }
 
         [Theory]
-        [InlineData(1, 5, 1, PaymentPeriodType.Daily, 4)]
-        [InlineData(2, 8, 3, PaymentPeriodType.Daily, 18)]
-        [InlineData(7, 14, 3, PaymentPeriodType.Weekly, 3)]
-        [InlineData(10.5, 24.5, 10, PaymentPeriodType.Weekly, 20)]
-        [InlineData(9, 21, 3, PaymentPeriodType.Monthly, 1.2)]
-        [InlineData(9, 21, 40, PaymentPeriodType.Monthly, 16)]
-        [InlineData(99, 199, 20, PaymentPeriodType.Annual, 5.48)]
-        [InlineData(99, 199, 385, PaymentPeriodType.Annual, 105.48)]
-        public void Calculate_Upgrade_To_Edition_Price(decimal currentEditionPrice, decimal targetEditionPrice, int remainingDaysCount, PaymentPeriodType paymentPeriodType, decimal upgradePrice)
+        [InlineData(PaymentPeriodType.Daily, 99.99, 199.99, 1, 4.17)]
+        [InlineData(PaymentPeriodType.Daily, 99.99, 199.99, 23, 95.83)]
+        [InlineData(PaymentPeriodType.Daily, 99.99, 199.99, 25, 104.17)]
+        [InlineData(PaymentPeriodType.Daily, 99.99, 199.99, 47, 195.83)]
+        [InlineData(PaymentPeriodType.Daily, 99.99, 199.99, 12, 50.00)]
+
+        [InlineData(PaymentPeriodType.Weekly, 99.99, 199.99, 1, 0.60)]
+        [InlineData(PaymentPeriodType.Weekly, 99.99, 199.99, 167, 99.40)]
+        [InlineData(PaymentPeriodType.Weekly, 99.99, 199.99, 169, 100.60)]
+        [InlineData(PaymentPeriodType.Weekly, 99.99, 199.99, 335, 199.40)]
+        [InlineData(PaymentPeriodType.Weekly, 99.99, 199.99, 84, 50.00)]
+
+        [InlineData(PaymentPeriodType.Monthly, 99.99, 199.99, 1, 0.14)]
+        [InlineData(PaymentPeriodType.Monthly, 99.99, 199.99, 719, 99.86)]
+        [InlineData(PaymentPeriodType.Monthly, 99.99, 199.99, 721, 100.14)]
+        [InlineData(PaymentPeriodType.Monthly, 99.99, 199.99, 1439, 199.86)]
+        [InlineData(PaymentPeriodType.Monthly, 99.99, 199.99, 360, 50.00)]
+
+        [InlineData(PaymentPeriodType.Annual, 99.99, 199.99, 1, 0.01)]
+        [InlineData(PaymentPeriodType.Annual, 99.99, 199.99, 8759, 99.99)]
+        [InlineData(PaymentPeriodType.Annual, 99.99, 199.99, 8761, 100.01)]
+        [InlineData(PaymentPeriodType.Annual, 99.99, 199.99, 17519, 199.99)]
+        [InlineData(PaymentPeriodType.Annual, 99.99, 199.99, 4380, 50.00)]
+        public void Calculate_Upgrade_To_Edition_Price(PaymentPeriodType paymentPeriodType, decimal currentEditionPrice, decimal targetEditionPrice, int remainingHoursCount, decimal upgradePrice)
         {
             // Used same price for easily testing upgrade price calculation.
             var currentEdition = new SubscribableEdition
@@ -62,7 +77,7 @@ namespace CoreOSR.Tests.MultiTenancy
                 AnnualPrice = targetEditionPrice
             };
 
-            var price = _tenantManager.GetUpgradePrice(currentEdition, targetEdition, remainingDaysCount, paymentPeriodType);
+            var price = _tenantManager.GetUpgradePrice(currentEdition, targetEdition, remainingHoursCount, paymentPeriodType);
 
             price.ToString("N2").ShouldBe(upgradePrice.ToString("N2"));
         }
@@ -406,8 +421,8 @@ namespace CoreOSR.Tests.MultiTenancy
 
             var result = await _paymentAppService.GetPaymentHistory(new GetPaymentHistoryInput());
             result.Items.Count.ShouldBe(2);
-            result.Items[0].DayCount.ShouldBe(2);
-            result.Items[1].DayCount.ShouldBe(29);
+            result.Items[0].DayCount.ShouldBe(1);
+            result.Items[1].DayCount.ShouldBe(30);
         }
 
         private async Task CreateUpdateTenant(PaymentPeriodType paymentPeriodType, EditionPaymentType editionPaymentType, DateTime? subscriptionEndDate, DateTime updatedSubscriptionEndDate)

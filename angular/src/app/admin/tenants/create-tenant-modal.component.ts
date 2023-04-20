@@ -1,21 +1,24 @@
 import { Component, EventEmitter, Injector, Output, ViewChild } from '@angular/core';
+import { DateTimeService } from '@app/shared/common/timing/date-time.service';
 import { AppComponentBase } from '@shared/common/app-component-base';
 import {
-    CommonLookupServiceProxy, CreateTenantInput,
-    PasswordComplexitySetting, ProfileServiceProxy,
-    TenantServiceProxy, SubscribableEditionComboboxItemDto
+    CommonLookupServiceProxy,
+    CreateTenantInput,
+    PasswordComplexitySetting,
+    ProfileServiceProxy,
+    TenantServiceProxy,
+    SubscribableEditionComboboxItemDto,
 } from '@shared/service-proxies/service-proxies';
-import * as _ from 'lodash';
-import { ModalDirective } from 'ngx-bootstrap';
+import { filter as _filter } from 'lodash-es';
+import { ModalDirective } from 'ngx-bootstrap/modal';
 import { finalize } from 'rxjs/operators';
 
 @Component({
     selector: 'createTenantModal',
-    templateUrl: './create-tenant-modal.component.html'
+    templateUrl: './create-tenant-modal.component.html',
 })
 export class CreateTenantModalComponent extends AppComponentBase {
-
-    @ViewChild('createModal', {static: true}) modal: ModalDirective;
+    @ViewChild('createModal', { static: true }) modal: ModalDirective;
 
     @Output() modalSave: EventEmitter<any> = new EventEmitter<any>();
 
@@ -35,7 +38,8 @@ export class CreateTenantModalComponent extends AppComponentBase {
         injector: Injector,
         private _tenantService: TenantServiceProxy,
         private _commonLookupService: CommonLookupServiceProxy,
-        private _profileService: ProfileServiceProxy
+        private _profileService: ProfileServiceProxy,
+        private _dateTimeService: DateTimeService
     ) {
         super(injector);
     }
@@ -44,7 +48,7 @@ export class CreateTenantModalComponent extends AppComponentBase {
         this.active = true;
         this.init();
 
-        this._profileService.getPasswordComplexitySetting().subscribe(result => {
+        this._profileService.getPasswordComplexitySetting().subscribe((result) => {
             this.passwordComplexitySetting = result.setting;
             this.modal.show();
         });
@@ -62,24 +66,23 @@ export class CreateTenantModalComponent extends AppComponentBase {
         this.tenant.editionId = 0;
         this.tenant.isInTrialPeriod = false;
 
-        this._commonLookupService.getEditionsForCombobox(false)
-            .subscribe((result) => {
-                this.editions = result.items;
+        this._commonLookupService.getEditionsForCombobox(false).subscribe((result) => {
+            this.editions = result.items;
 
-                let notAssignedItem = new SubscribableEditionComboboxItemDto();
-                notAssignedItem.value = '';
-                notAssignedItem.displayText = this.l('NotAssigned');
+            let notAssignedItem = new SubscribableEditionComboboxItemDto();
+            notAssignedItem.value = '';
+            notAssignedItem.displayText = this.l('NotAssigned');
 
-                this.editions.unshift(notAssignedItem);
+            this.editions.unshift(notAssignedItem);
 
-                this._commonLookupService.getDefaultEditionName().subscribe((getDefaultEditionResult) => {
-                    let defaultEdition = _.filter(this.editions, { 'displayText': getDefaultEditionResult.name });
-                    if (defaultEdition && defaultEdition[0]) {
-                        this.tenant.editionId = parseInt(defaultEdition[0].value);
-                        this.toggleSubscriptionFields();
-                    }
-                });
+            this._commonLookupService.getDefaultEditionName().subscribe((getDefaultEditionResult) => {
+                let defaultEdition = _filter(this.editions, { displayText: getDefaultEditionResult.name });
+                if (defaultEdition && defaultEdition[0]) {
+                    this.tenant.editionId = parseInt(defaultEdition[0].value);
+                    this.toggleSubscriptionFields();
+                }
             });
+        });
     }
 
     getEditionValue(item): number {
@@ -87,8 +90,9 @@ export class CreateTenantModalComponent extends AppComponentBase {
     }
 
     selectedEditionIsFree(): boolean {
-        let selectedEditions = _.filter(this.editions, { 'value': this.tenant.editionId.toString() })
-            .map(u => Object.assign(new SubscribableEditionComboboxItemDto(), u));
+        let selectedEditions = _filter(this.editions, { value: this.tenant.editionId.toString() }).map((u) =>
+            Object.assign(new SubscribableEditionComboboxItemDto(), u)
+        );
 
         if (selectedEditions.length !== 1) {
             this.isSelectedEditionFree = true;
@@ -126,12 +130,19 @@ export class CreateTenantModalComponent extends AppComponentBase {
             this.tenant.editionId = null;
         }
 
-        if (this.isUnlimited || this.tenant.editionId <= 0) {
-            this.tenant.subscriptionEndDateUtc = null;
+        if (this.isUnlimited) {
+            this.tenant.isInTrialPeriod = false;
         }
 
-        this._tenantService.createTenant(this.tenant)
-            .pipe(finalize(() => this.saving = false))
+        if (this.isUnlimited || this.tenant.editionId <= 0) {
+            this.tenant.subscriptionEndDateUtc = null;
+        } else {
+            this.tenant.subscriptionEndDateUtc = this._dateTimeService.toUtcDate(this.tenant.subscriptionEndDateUtc);
+        }
+
+        this._tenantService
+            .createTenant(this.tenant)
+            .pipe(finalize(() => (this.saving = false)))
             .subscribe(() => {
                 this.notify.info(this.l('SavedSuccessfully'));
                 this.close();
@@ -162,6 +173,12 @@ export class CreateTenantModalComponent extends AppComponentBase {
             }
         } else {
             this.isSubscriptionFieldsVisible = true;
+        }
+    }
+
+    onIsUnlimitedChange() {
+        if (this.isUnlimited) {
+            this.tenant.isInTrialPeriod = false;
         }
     }
 }

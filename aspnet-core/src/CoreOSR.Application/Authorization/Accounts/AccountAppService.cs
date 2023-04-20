@@ -17,6 +17,10 @@ using CoreOSR.Debugging;
 using CoreOSR.MultiTenancy;
 using CoreOSR.Security.Recaptcha;
 using CoreOSR.Url;
+using CoreOSR.Authorization.Delegation;
+using Abp.Domain.Repositories;
+using Abp.Timing;
+
 
 namespace CoreOSR.Authorization.Accounts
 {
@@ -32,6 +36,7 @@ namespace CoreOSR.Authorization.Accounts
         private readonly IUserLinkManager _userLinkManager;
         private readonly IPasswordHasher<User> _passwordHasher;
         private readonly IWebUrlService _webUrlService;
+        private readonly IUserDelegationManager _userDelegationManager;
 
         public AccountAppService(
             IUserEmailer userEmailer,
@@ -39,7 +44,8 @@ namespace CoreOSR.Authorization.Accounts
             IImpersonationManager impersonationManager,
             IUserLinkManager userLinkManager,
             IPasswordHasher<User> passwordHasher,
-            IWebUrlService webUrlService)
+            IWebUrlService webUrlService, 
+            IUserDelegationManager userDelegationManager)
         {
             _userEmailer = userEmailer;
             _userRegistrationManager = userRegistrationManager;
@@ -50,6 +56,7 @@ namespace CoreOSR.Authorization.Accounts
 
             AppUrlService = NullAppUrlService.Instance;
             RecaptchaValidator = NullRecaptchaValidator.Instance;
+            _userDelegationManager = userDelegationManager;
         }
 
         public async Task<IsTenantAvailableOutput> IsTenantAvailable(IsTenantAvailableInput input)
@@ -114,22 +121,33 @@ namespace CoreOSR.Authorization.Accounts
 
         public async Task SendPasswordResetCode(SendPasswordResetCodeInput input)
         {
-            var user = await GetUserByChecking(input.EmailAddress);
+            var user = await UserManager.FindByEmailAsync(input.EmailAddress);
+            if (user == null)
+            {
+                await Task.Delay(new Random(DateTime.Now.Millisecond).Next(2000, 5000)); // delay a random duration between 2 and 5 seconds to simulate sending an email
+                return;
+            }
+            
             user.SetNewPasswordResetCode();
             await _userEmailer.SendPasswordResetLinkAsync(
                 user,
                 AppUrlService.CreatePasswordResetUrlFormat(AbpSession.TenantId)
-                );
+            );
         }
 
         public async Task<ResetPasswordOutput> ResetPassword(ResetPasswordInput input)
         {
+            if (input.ExpireDate < Clock.Now)
+            {
+                throw new UserFriendlyException(L("PasswordResetLinkExpired"));
+            }
+            
             var user = await UserManager.GetUserByIdAsync(input.UserId);
             if (user == null || user.PasswordResetCode.IsNullOrEmpty() || user.PasswordResetCode != input.ResetCode)
             {
                 throw new UserFriendlyException(L("InvalidPasswordResetCode"), L("InvalidPasswordResetCode_Detail"));
             }
-
+    
             await UserManager.InitializeOptionsAsync(AbpSession.TenantId);
             CheckErrors(await UserManager.ChangePasswordAsync(user, input.Password));
             user.PasswordResetCode = null;
@@ -147,7 +165,12 @@ namespace CoreOSR.Authorization.Accounts
 
         public async Task SendEmailActivationLink(SendEmailActivationLinkInput input)
         {
-            var user = await GetUserByChecking(input.EmailAddress);
+            var user = await UserManager.FindByEmailAsync(input.EmailAddress);
+            if (user == null)
+            {
+                return;
+            }
+
             user.SetNewEmailConfirmationCode();
             await _userEmailer.SendEmailActivationLinkAsync(
                 user,
@@ -157,7 +180,7 @@ namespace CoreOSR.Authorization.Accounts
 
         public async Task ActivateEmail(ActivateEmailInput input)
         {
-            var user = await UserManager.GetUserByIdAsync(input.UserId);
+            var user = await UserManager.FindByIdAsync(input.UserId.ToString());
             if (user != null && user.IsEmailConfirmed)
             {
                 return;
@@ -175,12 +198,37 @@ namespace CoreOSR.Authorization.Accounts
         }
 
         [AbpAuthorize(AppPermissions.Pages_Administration_Users_Impersonation)]
-        public virtual async Task<ImpersonateOutput> Impersonate(ImpersonateInput input)
+        public virtual async Task<ImpersonateOutput> ImpersonateUser(ImpersonateUserInput input)
+        {
+            return new ImpersonateOutput
+            {
+                ImpersonationToken = await _impersonationManager.GetImpersonationToken(input.UserId, AbpSession.TenantId),
+                TenancyName = await GetTenancyNameOrNullAsync(input.TenantId)
+            };
+        }
+        
+        [AbpAuthorize(AppPermissions.Pages_Tenants_Impersonation)]
+        public virtual async Task<ImpersonateOutput> ImpersonateTenant(ImpersonateTenantInput input)
         {
             return new ImpersonateOutput
             {
                 ImpersonationToken = await _impersonationManager.GetImpersonationToken(input.UserId, input.TenantId),
                 TenancyName = await GetTenancyNameOrNullAsync(input.TenantId)
+            };
+        }
+
+        public virtual async Task<ImpersonateOutput> DelegatedImpersonate(DelegatedImpersonateInput input)
+        {
+            var userDelegation = await _userDelegationManager.GetAsync(input.UserDelegationId);
+            if (userDelegation.TargetUserId != AbpSession.GetUserId())
+            {
+                throw new UserFriendlyException("User delegation error.");
+            }
+
+            return new ImpersonateOutput
+            {
+                ImpersonationToken = await _impersonationManager.GetImpersonationToken(userDelegation.SourceUserId, userDelegation.TenantId),
+                TenancyName = await GetTenancyNameOrNullAsync(userDelegation.TenantId)
             };
         }
 
@@ -209,11 +257,6 @@ namespace CoreOSR.Authorization.Accounts
 
         private bool UseCaptchaOnRegistration()
         {
-            if (DebugHelper.IsDebug)
-            {
-                return false;
-            }
-
             return SettingManager.GetSettingValue<bool>(AppSettings.UserManagement.UseCaptchaOnRegistration);
         }
 
@@ -236,17 +279,6 @@ namespace CoreOSR.Authorization.Accounts
         private async Task<string> GetTenancyNameOrNullAsync(int? tenantId)
         {
             return tenantId.HasValue ? (await GetActiveTenantAsync(tenantId.Value)).TenancyName : null;
-        }
-
-        private async Task<User> GetUserByChecking(string inputEmailAddress)
-        {
-            var user = await UserManager.FindByEmailAsync(inputEmailAddress);
-            if (user == null)
-            {
-                throw new UserFriendlyException(L("InvalidEmailAddress"));
-            }
-
-            return user;
         }
     }
 }

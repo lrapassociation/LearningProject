@@ -10,5 +10,10 @@ namespace CoreOSR.Authorization
         {
             return await userManager.FindByNameAsync(AbpUserBase.AdminUserName);
         }
+        
+        public static User GetAdmin(this UserManager userManager)
+        {
+            return userManager.FindByNameOrEmail(AbpUserBase.AdminUserName);
+        }
     }
 }

@@ -9,11 +9,26 @@ export class UrlHelper {
     }
 
     static getQueryParametersUsingParameters(search: string): any {
-        return search.replace(/(^\?)/, '').split('&').map(function (n) { return n = n.split('='), this[n[0]] = n[1], this; }.bind({}))[0];
+        return search
+            .replace(/(^\?)/, '')
+            .split('&')
+            .map(
+                function (n) {
+                    return (n = n.split('=')), (this[n[0]] = n[1]), this;
+                }.bind({})
+            )[0];
     }
 
     static getQueryParametersUsingHash(): any {
-        return document.location.hash.substr(1, document.location.hash.length - 1).replace(/(^\?)/, '').split('&').map(function(n) { return n = n.split('='), this[n[0]] = n[1], this; }.bind({}))[0];
+        return document.location.hash
+            .substr(1, document.location.hash.length - 1)
+            .replace(/(^\?)/, '')
+            .split('&')
+            .map(
+                function (n) {
+                    return (n = n.split('=')), (this[n[0]] = n[1]), this;
+                }.bind({})
+            )[0];
     }
 
     static getInitialUrlParameters(): any {

@@ -1,27 +1,30 @@
 import { Component, EventEmitter, Injector, Output, ViewChild } from '@angular/core';
 import { AppComponentBase } from '@shared/common/app-component-base';
-import { FindOrganizationUnitRolesInput, NameValueDto, OrganizationUnitServiceProxy, RolesToOrganizationUnitInput } from '@shared/service-proxies/service-proxies';
-import * as _ from 'lodash';
-import { ModalDirective } from 'ngx-bootstrap';
-import { LazyLoadEvent } from 'primeng/components/common/lazyloadevent';
-import { Paginator } from 'primeng/components/paginator/paginator';
-import { Table } from 'primeng/components/table/table';
+import {
+    FindOrganizationUnitRolesInput,
+    NameValueDto,
+    OrganizationUnitServiceProxy,
+    RolesToOrganizationUnitInput,
+} from '@shared/service-proxies/service-proxies';
+import { map as _map } from 'lodash-es';
+import { ModalDirective } from 'ngx-bootstrap/modal';
+import { LazyLoadEvent } from 'primeng/api';
+import { Paginator } from 'primeng/paginator';
+import { Table } from 'primeng/table';
 import { IRolesWithOrganizationUnit } from './roles-with-organization-unit';
 import { finalize } from 'rxjs/operators';
 
 @Component({
     selector: 'addRoleModal',
-    templateUrl: './add-role-modal.component.html'
+    templateUrl: './add-role-modal.component.html',
 })
 export class AddRoleModalComponent extends AppComponentBase {
+    @Output() rolesAdded: EventEmitter<IRolesWithOrganizationUnit> = new EventEmitter<IRolesWithOrganizationUnit>();
+    @ViewChild('modal', { static: true }) modal: ModalDirective;
+    @ViewChild('dataTable', { static: true }) dataTable: Table;
+    @ViewChild('paginator', { static: true }) paginator: Paginator;
 
     organizationUnitId: number;
-
-    @Output() rolesAdded: EventEmitter<IRolesWithOrganizationUnit> = new EventEmitter<IRolesWithOrganizationUnit>();
-
-    @ViewChild('modal', {static: true}) modal: ModalDirective;
-    @ViewChild('dataTable', {static: true}) dataTable: Table;
-    @ViewChild('paginator', {static: true}) paginator: Paginator;
 
     isShown = false;
     filterText = '';
@@ -29,10 +32,7 @@ export class AddRoleModalComponent extends AppComponentBase {
     saving = false;
     selectedRoles: NameValueDto[];
 
-    constructor(
-        injector: Injector,
-        private _organizationUnitService: OrganizationUnitServiceProxy
-    ) {
+    constructor(injector: Injector, private _organizationUnitService: OrganizationUnitServiceProxy) {
         super(injector);
     }
 
@@ -62,11 +62,12 @@ export class AddRoleModalComponent extends AppComponentBase {
     }
 
     getRecords(event?: LazyLoadEvent): void {
-
         if (this.primengTableHelper.shouldResetPaging(event)) {
             this.paginator.changePage(0);
 
-            return;
+            if (this.primengTableHelper.records && this.primengTableHelper.records.length > 0) {
+                return;
+            }
         }
 
         this.primengTableHelper.showLoadingIndicator();
@@ -80,7 +81,7 @@ export class AddRoleModalComponent extends AppComponentBase {
         this._organizationUnitService
             .findRoles(input)
             .pipe(finalize(() => this.primengTableHelper.hideLoadingIndicator()))
-            .subscribe(result => {
+            .subscribe((result) => {
                 this.primengTableHelper.totalRecordsCount = result.totalCount;
                 this.primengTableHelper.records = result.items;
                 this.primengTableHelper.hideLoadingIndicator();
@@ -90,19 +91,17 @@ export class AddRoleModalComponent extends AppComponentBase {
     addRolesToOrganizationUnit(): void {
         const input = new RolesToOrganizationUnitInput();
         input.organizationUnitId = this.organizationUnitId;
-        input.roleIds = _.map(this.selectedRoles, selectedRole => Number(selectedRole.value));
+        input.roleIds = _map(this.selectedRoles, (selectedRole) => Number(selectedRole.value));
         this.saving = true;
-        this._organizationUnitService
-            .addRolesToOrganizationUnit(input)
-            .subscribe(() => {
-                this.notify.success(this.l('SuccessfullyAdded'));
-                this.rolesAdded.emit({
-                    roleIds: input.roleIds,
-                    ouId: input.organizationUnitId
-                });
-                this.saving = false;
-                this.close();
-                this.selectedRoles = [];
+        this._organizationUnitService.addRolesToOrganizationUnit(input).subscribe(() => {
+            this.notify.success(this.l('SuccessfullyAdded'));
+            this.rolesAdded.emit({
+                roleIds: input.roleIds,
+                ouId: input.organizationUnitId,
             });
+            this.saving = false;
+            this.close();
+            this.selectedRoles = [];
+        });
     }
 }

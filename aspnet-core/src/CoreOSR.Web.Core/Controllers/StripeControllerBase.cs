@@ -1,22 +1,25 @@
 ﻿using System;
 using System.IO;
 using System.Threading.Tasks;
-using Abp;
 using Microsoft.AspNetCore.Mvc;
 using CoreOSR.MultiTenancy.Payments.Stripe;
+using CoreOSR.MultiTenancy.Payments.Stripe.Dto;
 using Stripe;
 
 namespace CoreOSR.Web.Controllers
 {
     public class StripeControllerBase : CoreOSRControllerBase
     {
+        protected readonly IStripePaymentAppService StripePaymentAppService;
         private readonly StripeGatewayManager _stripeGatewayManager;
         private readonly StripePaymentGatewayConfiguration _stripeConfiguration;
 
         public StripeControllerBase(
             StripeGatewayManager stripeGatewayManager,
-            StripePaymentGatewayConfiguration stripeConfiguration)
+            StripePaymentGatewayConfiguration stripeConfiguration,
+            IStripePaymentAppService stripePaymentAppService)
         {
+            StripePaymentAppService = stripePaymentAppService;
             _stripeGatewayManager = stripeGatewayManager;
             _stripeConfiguration = stripeConfiguration;
         }
@@ -24,15 +27,24 @@ namespace CoreOSR.Web.Controllers
         [HttpPost]
         public async Task<IActionResult> WebHooks()
         {
-            var json = new StreamReader(HttpContext.Request.Body).ReadToEnd();
+            string json;
+            using (var streamReader = new StreamReader(HttpContext.Request.Body))
+            {
+                json = await streamReader.ReadToEndAsync();
+            }
 
             try
             {
                 var stripeEvent = EventUtility.ConstructEvent(json, Request.Headers["Stripe-Signature"], _stripeConfiguration.WebhookSecret);
 
-                if (stripeEvent.Type == Events.InvoicePaymentSucceeded)
+                if (stripeEvent.Type == Events.InvoicePaid)
                 {
                     await HandleSubscriptionCyclePaymentAsync(stripeEvent);
+                }
+
+                if (stripeEvent.Type == Events.CheckoutSessionCompleted)
+                {
+                    await HandleCheckoutSessionCompletedAsync(stripeEvent);
                 }
 
                 // Other WebHook events can be handled here.
@@ -65,6 +77,21 @@ namespace CoreOSR.Web.Controllers
             {
                 await _stripeGatewayManager.HandleInvoicePaymentSucceededAsync(invoice);
             }
+        }
+
+        private async Task HandleCheckoutSessionCompletedAsync(Event stripeEvent)
+        {
+            var session = stripeEvent.Data.Object as Stripe.Checkout.Session;
+            if (session == null)
+            {
+                throw new ApplicationException("Unable to get session information from stripeEvent.Data");
+            }
+
+            await StripePaymentAppService.ConfirmPayment(
+                new StripeConfirmPaymentInput
+                {
+                    StripeSessionId = session.Id
+                });
         }
     }
 }

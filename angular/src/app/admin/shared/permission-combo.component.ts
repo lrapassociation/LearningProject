@@ -1,38 +1,50 @@
-import { Component, ElementRef, EventEmitter, Injector, Input, OnInit, Output, ViewChild, forwardRef } from '@angular/core';
+import {
+    Component,
+    ElementRef,
+    EventEmitter,
+    Injector,
+    Input,
+    OnInit,
+    Output,
+    ViewChild,
+    forwardRef,
+} from '@angular/core';
 import { AppComponentBase } from '@shared/common/app-component-base';
 import { FlatPermissionWithLevelDto, PermissionServiceProxy } from '@shared/service-proxies/service-proxies';
-import * as _ from 'lodash';
-import { ControlValueAccessor, FormControl, NG_VALUE_ACCESSOR } from '@angular/forms';
+import { forEach as _forEach } from 'lodash-es';
+import { ControlValueAccessor, UntypedFormControl, NG_VALUE_ACCESSOR } from '@angular/forms';
 
 @Component({
     selector: 'permission-combo',
-    template:
-        `<select class="form-control" [formControl]="selectedPermission">
-        <option value="">{{'FilterByPermission' | localize}}</option>
-        <option *ngFor="let permission of permissions" [value]="permission.name">{{permission.displayName}}</option>
-    </select>`,
-    providers: [{
-        provide: NG_VALUE_ACCESSOR,
-        useExisting: forwardRef(() => PermissionComboComponent),
-        multi: true,
-    }]
+    template: `
+        <select class="form-select" [formControl]="selectedPermission">
+            <option value="">{{ 'FilterByPermission' | localize }}</option>
+            <option *ngFor="let permission of permissions" [value]="permission.name">
+                {{ permission.displayName }}
+            </option>
+        </select>
+    `,
+    providers: [
+        {
+            provide: NG_VALUE_ACCESSOR,
+            useExisting: forwardRef(() => PermissionComboComponent),
+            multi: true,
+        },
+    ],
 })
 export class PermissionComboComponent extends AppComponentBase implements OnInit, ControlValueAccessor {
-
     permissions: FlatPermissionWithLevelDto[] = [];
-    selectedPermission = new FormControl('');
+    selectedPermission = new UntypedFormControl('');
 
-    onTouched: any = () => { };
-
-    constructor(
-        private _permissionService: PermissionServiceProxy,
-        injector: Injector) {
+    constructor(private _permissionService: PermissionServiceProxy, injector: Injector) {
         super(injector);
     }
 
+    onTouched: any = () => {};
+
     ngOnInit(): void {
-        this._permissionService.getAllPermissions().subscribe(result => {
-            _.forEach(result.items, item => {
+        this._permissionService.getAllPermissions().subscribe((result) => {
+            _forEach(result.items, (item) => {
                 item.displayName = Array(item.level + 1).join('---') + ' ' + item.displayName;
             });
 

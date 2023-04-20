@@ -1,7 +1,12 @@
 import { ChangeDetectorRef, Component, ElementRef, EventEmitter, Injector, Output, ViewChild } from '@angular/core';
 import { AppComponentBase } from '@shared/common/app-component-base';
-import { CreateOrganizationUnitInput, OrganizationUnitDto, OrganizationUnitServiceProxy, UpdateOrganizationUnitInput } from '@shared/service-proxies/service-proxies';
-import { ModalDirective } from 'ngx-bootstrap';
+import {
+    CreateOrganizationUnitInput,
+    OrganizationUnitDto,
+    OrganizationUnitServiceProxy,
+    UpdateOrganizationUnitInput,
+} from '@shared/service-proxies/service-proxies';
+import { ModalDirective } from 'ngx-bootstrap/modal';
 import { finalize } from 'rxjs/operators';
 
 export interface IOrganizationUnitOnEdit {
@@ -12,12 +17,11 @@ export interface IOrganizationUnitOnEdit {
 
 @Component({
     selector: 'createOrEditOrganizationUnitModal',
-    templateUrl: './create-or-edit-unit-modal.component.html'
+    templateUrl: './create-or-edit-unit-modal.component.html',
 })
 export class CreateOrEditUnitModalComponent extends AppComponentBase {
-
-    @ViewChild('createOrEditModal', {static: true}) modal: ModalDirective;
-    @ViewChild('organizationUnitDisplayName', {static: true}) organizationUnitDisplayNameInput: ElementRef;
+    @ViewChild('createOrEditModal', { static: true }) modal: ModalDirective;
+    @ViewChild('organizationUnitDisplayName', { static: true }) organizationUnitDisplayNameInput: ElementRef;
 
     @Output() unitCreated: EventEmitter<OrganizationUnitDto> = new EventEmitter<OrganizationUnitDto>();
     @Output() unitUpdated: EventEmitter<OrganizationUnitDto> = new EventEmitter<OrganizationUnitDto>();
@@ -62,7 +66,7 @@ export class CreateOrEditUnitModalComponent extends AppComponentBase {
         this.saving = true;
         this._organizationUnitService
             .createOrganizationUnit(createInput)
-            .pipe(finalize(() => this.saving = false))
+            .pipe(finalize(() => (this.saving = false)))
             .subscribe((result: OrganizationUnitDto) => {
                 this.notify.info(this.l('SavedSuccessfully'));
                 this.close();
@@ -78,7 +82,7 @@ export class CreateOrEditUnitModalComponent extends AppComponentBase {
         this.saving = true;
         this._organizationUnitService
             .updateOrganizationUnit(updateInput)
-            .pipe(finalize(() => this.saving = false))
+            .pipe(finalize(() => (this.saving = false)))
             .subscribe((result: OrganizationUnitDto) => {
                 this.notify.info(this.l('SavedSuccessfully'));
                 this.close();

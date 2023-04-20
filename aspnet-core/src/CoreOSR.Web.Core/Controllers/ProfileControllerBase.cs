@@ -1,76 +1,84 @@
 using System;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
+using Abp.AspNetZeroCore.Net;
 using Abp.Extensions;
 using Abp.IO.Extensions;
 using Abp.UI;
-using Abp.Web.Models;
-using CoreOSR.Authorization.Users.Profile.Dto;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using CoreOSR.Authorization.Users.Profile;
 using CoreOSR.Dto;
+using CoreOSR.Graphics;
 using CoreOSR.Storage;
-using CoreOSR.Web.Helpers;
 
 namespace CoreOSR.Web.Controllers
 {
     public abstract class ProfileControllerBase : CoreOSRControllerBase
     {
         private readonly ITempFileCacheManager _tempFileCacheManager;
-
+        private readonly IProfileAppService _profileAppService;
+        private readonly IImageFormatValidator _imageFormatValidator;
+        
         private const int MaxProfilePictureSize = 5242880; //5MB
 
-        protected ProfileControllerBase(ITempFileCacheManager tempFileCacheManager)
+        protected ProfileControllerBase(
+            ITempFileCacheManager tempFileCacheManager,
+            IProfileAppService profileAppService, 
+            IImageFormatValidator imageFormatValidator)
         {
             _tempFileCacheManager = tempFileCacheManager;
+            _profileAppService = profileAppService;
+            _imageFormatValidator = imageFormatValidator;
+        }
+        
+        public void UploadProfilePicture(FileDto input)
+        {
+            var profilePictureFile = Request.Form.Files.First();
+
+            //Check input
+            if (profilePictureFile == null)
+            {
+                throw new UserFriendlyException(L("ProfilePicture_Change_Error"));
+            }
+
+            if (profilePictureFile.Length > MaxProfilePictureSize)
+            {
+                throw new UserFriendlyException(L("ProfilePicture_Warn_SizeLimit",
+                    AppConsts.MaxProfilePictureBytesUserFriendlyValue));
+            }
+
+            byte[] fileBytes;
+            using (var stream = profilePictureFile.OpenReadStream())
+            {
+                fileBytes = stream.GetAllBytes();
+                _imageFormatValidator.Validate(fileBytes);
+            }
+
+            _tempFileCacheManager.SetFile(input.FileToken, fileBytes);
         }
 
-        public UploadProfilePictureOutput UploadProfilePicture(FileDto input)
+        [AllowAnonymous]
+        public FileResult GetDefaultProfilePicture()
         {
-            try
+            return GetDefaultProfilePictureInternal();
+        }
+
+        public async Task<FileResult> GetProfilePictureByUser(long userId)
+        {
+            var output = await _profileAppService.GetProfilePictureByUser(userId);
+            if (output.ProfilePicture.IsNullOrEmpty())
             {
-                var profilePictureFile = Request.Form.Files.First();
-
-                //Check input
-                if (profilePictureFile == null)
-                {
-                    throw new UserFriendlyException(L("ProfilePicture_Change_Error"));
-                }
-
-                if (profilePictureFile.Length > MaxProfilePictureSize)
-                {
-                    throw new UserFriendlyException(L("ProfilePicture_Warn_SizeLimit", AppConsts.MaxProfilPictureBytesUserFriendlyValue));
-                }
-
-                byte[] fileBytes;
-                using (var stream = profilePictureFile.OpenReadStream())
-                {
-                    fileBytes = stream.GetAllBytes();
-                }
-
-                if (!ImageFormatHelper.GetRawImageFormat(fileBytes).IsIn(ImageFormat.Jpeg, ImageFormat.Png, ImageFormat.Gif))
-                {
-                    throw new Exception(L("IncorrectImageFormat"));
-                }
-
-                _tempFileCacheManager.SetFile(input.FileToken, fileBytes);
-
-                using (var bmpImage = new Bitmap(new MemoryStream(fileBytes)))
-                {
-                    return new UploadProfilePictureOutput
-                    {
-                        FileToken = input.FileToken,
-                        FileName = input.FileName,
-                        FileType = input.FileType,
-                        Width = bmpImage.Width,
-                        Height = bmpImage.Height
-                    };
-                }
+                return GetDefaultProfilePictureInternal();
             }
-            catch (UserFriendlyException ex)
-            {
-                return new UploadProfilePictureOutput(new ErrorInfo(ex.Message));
-            }
+
+            return File(Convert.FromBase64String(output.ProfilePicture), MimeTypeNames.ImageJpeg);
+        }
+
+        protected FileResult GetDefaultProfilePictureInternal()
+        {
+            return File(Path.Combine("Common", "Images", "default-profile-picture.png"), MimeTypeNames.ImagePng);
         }
     }
 }

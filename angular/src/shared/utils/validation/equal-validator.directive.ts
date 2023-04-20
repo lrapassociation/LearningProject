@@ -5,16 +5,13 @@ import { AbstractControl, NG_VALIDATORS, Validator } from '@angular/forms';
 
 @Directive({
     selector: '[validateEqual][formControlName],[validateEqual][formControl],[validateEqual][ngModel]',
-    providers: [
-        { provide: NG_VALIDATORS, useExisting: forwardRef(() => EqualValidator), multi: true }
-    ]
+    providers: [{ provide: NG_VALIDATORS, useExisting: forwardRef(() => EqualValidator), multi: true }],
 })
 export class EqualValidator implements Validator {
     constructor(
         @Attribute('validateEqual') public validateEqual: string,
         @Attribute('reverse') public reverse: string
-    ) {
-    }
+    ) {}
 
     private get isReverse() {
         if (!this.reverse) {
@@ -43,7 +40,7 @@ export class EqualValidator implements Validator {
                 this.deleteErrors(pairControl);
             } else {
                 pairControl.setErrors({
-                    validateEqual: true
+                    validateEqual: true,
                 });
             }
 
@@ -51,7 +48,7 @@ export class EqualValidator implements Validator {
         } else {
             if (value !== pairValue) {
                 return {
-                    validateEqual: true
+                    validateEqual: true,
                 };
             }
         }

@@ -32,7 +32,7 @@ namespace CoreOSR.Tests.MultiTenancy
                 invoiceNo.ShouldNotBeNullOrEmpty();
                 invoiceNo.Length.ShouldBe(11);//Should be YYYYMM00001
 
-                _invoiceRepository.Insert(new Invoice
+                await _invoiceRepository.InsertAsync(new Invoice
                 {
                     InvoiceNo = invoiceNo,
                     InvoiceDate = Clock.Now,
@@ -51,7 +51,7 @@ namespace CoreOSR.Tests.MultiTenancy
         [MultiTenantFact]
         public async Task Should_Start_Over_InvoiceNo_When_Month_Changes()
         {
-            _invoiceRepository.Insert(new Invoice
+            await _invoiceRepository.InsertAsync(new Invoice
             {
                 InvoiceNo = Clock.Now.Year + (Clock.Now.Month - 1).ToString("00") + "55555",
                 InvoiceDate = Clock.Now,
@@ -67,7 +67,7 @@ namespace CoreOSR.Tests.MultiTenancy
         [MultiTenantFact]
         public async Task Should_Start_Over_InvoiceNo_When_Year_Changes()
         {
-            _invoiceRepository.Insert(new Invoice
+            await _invoiceRepository.InsertAsync(new Invoice
             {
                 InvoiceNo = (Clock.Now.Year - 1) + (Clock.Now.Month).ToString("00") + "55555",
                 InvoiceDate = Clock.Now,
@@ -83,7 +83,7 @@ namespace CoreOSR.Tests.MultiTenancy
         [MultiTenantFact]
         public async Task Should_Handle_When_Invoice_Number_Exceeds_Defined_Range()
         {
-            _invoiceRepository.Insert(new Invoice
+            await _invoiceRepository.InsertAsync(new Invoice
             {
                 InvoiceNo = Clock.Now.Year + Clock.Now.Month.ToString("00") + "99999",
                 InvoiceDate = Clock.Now,
@@ -95,7 +95,7 @@ namespace CoreOSR.Tests.MultiTenancy
             var invoiceNo = await _invoiceNumberGenerator.GetNewInvoiceNumber();
             invoiceNo.ShouldBe(Clock.Now.Year + (Clock.Now.Month).ToString("00") + "100000");
 
-            _invoiceRepository.Insert(new Invoice
+            await _invoiceRepository.InsertAsync(new Invoice
             {
                 InvoiceNo = invoiceNo,
                 InvoiceDate = Clock.Now,

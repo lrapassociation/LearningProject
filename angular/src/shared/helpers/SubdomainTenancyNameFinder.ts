@@ -2,6 +2,9 @@ import { AppConsts } from '@shared/AppConsts';
 import { FormattedStringValueExtracter } from '@shared/helpers/FormattedStringValueExtracter';
 
 export class SubdomainTenancyNameFinder {
+    urlHasTenancyNamePlaceholder(url: string): boolean {
+        return url.indexOf(AppConsts.tenancyNamePlaceHolderInUrl) >= 0;
+    }
 
     getCurrentTenancyNameOrNull(rootAddress: string): string {
         if (rootAddress.indexOf(AppConsts.tenancyNamePlaceHolderInUrl) < 0) {
@@ -19,5 +22,4 @@ export class SubdomainTenancyNameFinder {
 
         return values[0];
     }
-
 }

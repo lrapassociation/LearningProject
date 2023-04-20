@@ -1,25 +1,44 @@
 ﻿using System;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+using Abp;
 using Abp.AspNetZeroCore;
 using Abp.AspNetZeroCore.Timing;
 using Abp.AutoMapper;
+using Abp.BackgroundJobs;
 using Abp.Dependency;
 using Abp.Modules;
 using Abp.Net.Mail;
 using Abp.Reflection.Extensions;
 using Abp.Timing;
 using Abp.Configuration.Startup;
+using Abp.Domain.Uow;
+using Abp.Events.Bus;
+using Abp.Events.Bus.Exceptions;
+using Abp.Json;
+using Abp.Localization.Dictionaries.Xml;
+using Abp.Localization.Sources;
 using Abp.MailKit;
 using Abp.Net.Mail.Smtp;
+using Abp.Threading;
+using Abp.Threading.BackgroundWorkers;
+using Abp.Threading.Timers;
 using Abp.Zero;
 using Abp.Zero.Configuration;
 using Abp.Zero.Ldap;
+using Abp.Zero.Ldap.Configuration;
 using Castle.MicroKernel.Registration;
 using MailKit.Security;
+using CoreOSR.Authorization.Delegation;
+using CoreOSR.Authorization.Ldap;
 using CoreOSR.Authorization.Roles;
 using CoreOSR.Authorization.Users;
 using CoreOSR.Chat;
 using CoreOSR.Configuration;
+using CoreOSR.DashboardCustomization.Definitions;
 using CoreOSR.Debugging;
+using CoreOSR.DynamicEntityProperties;
 using CoreOSR.Features;
 using CoreOSR.Friendships;
 using CoreOSR.Friendships.Cache;
@@ -27,10 +46,13 @@ using CoreOSR.Localization;
 using CoreOSR.MultiTenancy;
 using CoreOSR.Net.Emailing;
 using CoreOSR.Notifications;
+using CoreOSR.WebHooks;
+using Newtonsoft.Json;
 
 namespace CoreOSR
 {
     [DependsOn(
+        typeof(CoreOSRCoreSharedModule),
         typeof(AbpZeroCoreModule),
         typeof(AbpZeroLdapModule),
         typeof(AbpAutoMapperModule),
@@ -62,14 +84,22 @@ namespace CoreOSR
             //Adding notification providers
             Configuration.Notifications.Providers.Add<AppNotificationProvider>();
 
+            //Adding webhook definition providers
+            Configuration.Webhooks.Providers.Add<AppWebhookDefinitionProvider>();
+            Configuration.Webhooks.TimeoutDuration = TimeSpan.FromMinutes(1);
+            Configuration.Webhooks.IsAutomaticSubscriptionDeactivationEnabled = false;
+
             //Enable this line to create a multi-tenant application.
             Configuration.MultiTenancy.IsEnabled = CoreOSRConsts.MultiTenancyEnabled;
 
-            //Enable LDAP authentication (It can be enabled only if MultiTenancy is disabled!)
+            //Enable LDAP authentication 
             //Configuration.Modules.ZeroLdap().Enable(typeof(AppLdapAuthenticationSource));
 
             //Twilio - Enable this line to activate Twilio SMS integration
             //Configuration.ReplaceService<ISmsSender,TwilioSmsSender>();
+
+            //Adding DynamicEntityParameters definition providers
+            Configuration.DynamicEntityProperties.Providers.Add<AppDynamicEntityPropertyDefinitionProvider>();
 
             // MailKit configuration
             Configuration.Modules.AbpMailKit().SecureSocketOption = SecureSocketOptions.Auto;
@@ -97,6 +127,12 @@ namespace CoreOSR
             {
                 cache.DefaultSlidingExpireTime = TimeSpan.FromMinutes(30);
             });
+
+            IocManager.Register<DashboardConfiguration>();
+            
+            Configuration.Notifications.Notifiers.Add<SmsRealTimeNotifier>();
+            Configuration.Notifications.Notifiers.Add<EmailRealTimeNotifier>();
+
         }
 
         public override void Initialize()
@@ -107,6 +143,7 @@ namespace CoreOSR
         public override void PostInitialize()
         {
             IocManager.RegisterIfNot<IChatCommunicator, NullChatCommunicator>();
+            IocManager.Register<IUserDelegationConfiguration, UserDelegationConfiguration>();
 
             IocManager.Resolve<ChatUserStateWatcher>().Initialize();
             IocManager.Resolve<AppTimes>().StartupTime = Clock.Now;

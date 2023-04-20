@@ -14,9 +14,9 @@ using CoreOSR.MultiTenancy.Payments.Dto;
 using Abp.Application.Services.Dto;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Dynamic.Core;
-using Abp;
 using Abp.Collections.Extensions;
 using Abp.Linq.Extensions;
+using Microsoft.AspNetCore.Authorization;
 
 namespace CoreOSR.MultiTenancy.Payments
 {
@@ -26,6 +26,7 @@ namespace CoreOSR.MultiTenancy.Payments
         private readonly EditionManager _editionManager;
         private readonly IPaymentGatewayStore _paymentGatewayStore;
         private readonly TenantManager _tenantManager;
+
 
         public PaymentAppService(
             ISubscriptionPaymentRepository subscriptionPaymentRepository,
@@ -56,22 +57,14 @@ namespace CoreOSR.MultiTenancy.Payments
 
             if (input.UpgradeEditionId.HasValue)
             {
-                var remainingDaysCount = tenant.CalculateRemainingDayCount();
-                if (remainingDaysCount > 0)
-                {
-                    var lastPayment = await _subscriptionPaymentRepository.GetLastCompletedPaymentOrDefaultAsync(tenant.Id, null, null);
-                    if (lastPayment == null || !lastPayment.PaymentPeriodType.HasValue)
-                    {
-                        throw new ApplicationException("There is no completed payment record !");
-                    }
+                var lastPayment = await _subscriptionPaymentRepository.GetLastCompletedPaymentOrDefaultAsync(
+                    tenantId: AbpSession.GetTenantId(),
+                    gateway: null,
+                    isRecurring: null);
 
-                    additionalPrice = TenantManager
-                        .GetUpgradePrice(
-                            currentEdition,
-                            targetEdition,
-                            remainingDaysCount,
-                            lastPayment.PaymentPeriodType.Value
-                        );
+                using (UnitOfWorkManager.Current.SetTenantId(null))
+                {
+                    additionalPrice = await CalculateAmountForPaymentAsync(targetEdition, lastPayment.PaymentPeriodType, EditionPaymentType.Upgrade, tenant);
                 }
             }
 
@@ -101,17 +94,11 @@ namespace CoreOSR.MultiTenancy.Payments
 
                 var tenant = await TenantManager.GetByIdAsync(AbpSession.GetTenantId());
                 amount = await CalculateAmountForPaymentAsync(targetEdition, input.PaymentPeriodType, input.EditionPaymentType, tenant);
-
-                if (tenant != null && input.RecurringPaymentEnabled)
-                {
-                    tenant.SubscriptionPaymentType = SubscriptionPaymentType.RecurringAutomatic;
-                    await _tenantManager.UpdateAsync(tenant);
-                }
             }
 
             var payment = new SubscriptionPayment
             {
-                Description = GetPaymentDescription(input.EditionPaymentType, input.PaymentPeriodType, targetEditionName),
+                Description = GetPaymentDescription(input.EditionPaymentType, input.PaymentPeriodType, targetEditionName, input.RecurringPaymentEnabled),
                 PaymentPeriodType = input.PaymentPeriodType,
                 EditionId = input.EditionId,
                 TenantId = AbpSession.GetTenantId(),
@@ -120,7 +107,8 @@ namespace CoreOSR.MultiTenancy.Payments
                 DayCount = input.PaymentPeriodType.HasValue ? (int)input.PaymentPeriodType.Value : 0,
                 IsRecurring = input.RecurringPaymentEnabled,
                 SuccessUrl = input.SuccessUrl,
-                ErrorUrl = input.ErrorUrl
+                ErrorUrl = input.ErrorUrl,
+                EditionPaymentType = input.EditionPaymentType
             };
 
             return await _subscriptionPaymentRepository.InsertAndGetIdAsync(payment);
@@ -174,6 +162,7 @@ namespace CoreOSR.MultiTenancy.Payments
         public async Task BuyNowSucceed(long paymentId)
         {
             var payment = await _subscriptionPaymentRepository.GetAsync(paymentId);
+
             if (payment.Status != SubscriptionPaymentStatus.Paid)
             {
                 throw new ApplicationException("Your payment is not completed !");
@@ -269,9 +258,9 @@ namespace CoreOSR.MultiTenancy.Payments
                 throw new UserFriendlyException(L("CanNotUpgradeSubscriptionSinceTenantHasNoEditionAssigned"));
             }
 
-            var remainingDaysCount = tenant.CalculateRemainingDayCount();
+            var remainingHoursCount = tenant.CalculateRemainingHoursCount();
 
-            if (remainingDaysCount <= 0)
+            if (remainingHoursCount <= 0)
             {
                 return targetEdition.GetPaymentAmount(periodType);
             }
@@ -281,19 +270,25 @@ namespace CoreOSR.MultiTenancy.Payments
             var currentEdition = (SubscribableEdition)await _editionManager.GetByIdAsync(tenant.EditionId.Value);
 
             var lastPayment = await _subscriptionPaymentRepository.GetLastCompletedPaymentOrDefaultAsync(tenant.Id, null, null);
-            if (lastPayment == null || !lastPayment.PaymentPeriodType.HasValue)
+            if (lastPayment?.PaymentPeriodType == null)
             {
                 throw new ApplicationException("There is no completed payment record !");
             }
 
-            return TenantManager.GetUpgradePrice(currentEdition, targetEdition, remainingDaysCount, lastPayment.PaymentPeriodType.Value);
+            return TenantManager.GetUpgradePrice(currentEdition, targetEdition, remainingHoursCount, lastPayment.PaymentPeriodType.Value);
         }
 
-        private string GetPaymentDescription(EditionPaymentType editionPaymentType, PaymentPeriodType? paymentPeriodType, string targetEditionName)
+        private string GetPaymentDescription(EditionPaymentType editionPaymentType, PaymentPeriodType? paymentPeriodType, string targetEditionName, bool isRecurring)
         {
             var description = L(editionPaymentType + "_Edition_Description", targetEditionName);
+
             if (!paymentPeriodType.HasValue)
             {
+                if (isRecurring && editionPaymentType == EditionPaymentType.Upgrade)
+                {
+                    description += " (" + L("CostOfProration") + ")";
+                }
+
                 return description;
             }
 
@@ -302,7 +297,76 @@ namespace CoreOSR.MultiTenancy.Payments
                 description += " (" + L(paymentPeriodType.Value.ToString()) + ")";
             }
 
+            if (isRecurring && editionPaymentType == EditionPaymentType.Upgrade)
+            {
+                description += " (" + L("CostOfProration") + ")";
+            }
+
             return description;
+        }
+
+        public async Task SwitchBetweenFreeEditions(int upgradeEditionId)
+        {
+            var tenant = await _tenantManager.GetByIdAsync(AbpSession.GetTenantId());
+
+            if (!tenant.EditionId.HasValue)
+            {
+                throw new ArgumentException("tenant.EditionId can not be null");
+            }
+
+            var currentEdition = await _editionManager.GetByIdAsync(tenant.EditionId.Value);
+            if (!((SubscribableEdition)currentEdition).IsFree)
+            {
+                throw new ArgumentException("You can only switch between free editions. Current edition if not free");
+            }
+
+            var upgradeEdition = await _editionManager.GetByIdAsync(upgradeEditionId);
+            if (!((SubscribableEdition)upgradeEdition).IsFree)
+            {
+                throw new ArgumentException("You can only switch between free editions. Target edition if not free");
+            }
+
+            await _tenantManager.UpdateTenantAsync(
+                    tenant.Id,
+                    true,
+                    null,
+                    null,
+                    upgradeEditionId,
+                    EditionPaymentType.Upgrade
+                );
+        }
+
+        public async Task UpgradeSubscriptionCostsLessThenMinAmount(int editionId)
+        {
+            var paymentInfo = await GetPaymentInfo(new PaymentInfoInput { UpgradeEditionId = editionId });
+
+            if (!paymentInfo.IsLessThanMinimumUpgradePaymentAmount())
+            {
+                throw new ApplicationException("Subscription payment requires more than minimum upgrade payment amount. Use payment gateway to charge payment amount.");
+            }
+
+            var lastPayment = await _subscriptionPaymentRepository.GetLastCompletedPaymentOrDefaultAsync(
+                tenantId: AbpSession.GetTenantId(),
+                gateway: null,
+                isRecurring: null);
+
+            await _tenantManager.UpdateTenantAsync(
+                AbpSession.GetTenantId(),
+                true,
+                null,
+                lastPayment.GetPaymentPeriodType(),
+                editionId,
+                EditionPaymentType.Upgrade
+            );
+        }
+
+        [AbpAuthorize(AppPermissions.Pages_Administration_Tenant_SubscriptionManagement)]
+        public async Task<bool> HasAnyPayment()
+        {
+            return await _subscriptionPaymentRepository.GetLastCompletedPaymentOrDefaultAsync(
+                       tenantId: AbpSession.GetTenantId(),
+                       gateway: null,
+                       isRecurring: null) != default;
         }
     }
 }

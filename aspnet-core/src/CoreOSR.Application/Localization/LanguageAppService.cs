@@ -28,7 +28,7 @@ namespace CoreOSR.Localization
         public LanguageAppService(
             IApplicationLanguageManager applicationLanguageManager,
             IApplicationLanguageTextManager applicationLanguageTextManager,
-            IRepository<ApplicationLanguage> languageRepository, 
+            IRepository<ApplicationLanguage> languageRepository,
             IApplicationCulturesProvider applicationCulturesProvider)
         {
             _applicationLanguageManager = applicationLanguageManager;
@@ -39,16 +39,18 @@ namespace CoreOSR.Localization
 
         public async Task<GetLanguagesOutput> GetLanguages()
         {
-            var languages = (await _applicationLanguageManager.GetLanguagesAsync(AbpSession.TenantId)).OrderBy(l => l.DisplayName);
+            var languages =
+                (await _applicationLanguageManager.GetLanguagesAsync(AbpSession.TenantId)).OrderBy(l => l.DisplayName);
             var defaultLanguage = await _applicationLanguageManager.GetDefaultLanguageOrNullAsync(AbpSession.TenantId);
 
             return new GetLanguagesOutput(
                 ObjectMapper.Map<List<ApplicationLanguageListDto>>(languages),
                 defaultLanguage?.Name
-                );
+            );
         }
 
-        [AbpAuthorize(AppPermissions.Pages_Administration_Languages_Create, AppPermissions.Pages_Administration_Languages_Edit)]
+        [AbpAuthorize(AppPermissions.Pages_Administration_Languages_Create,
+            AppPermissions.Pages_Administration_Languages_Edit)]
         public async Task<GetLanguageForEditOutput> GetLanguageForEdit(NullableIdDto input)
         {
             ApplicationLanguage language = null;
@@ -67,14 +69,16 @@ namespace CoreOSR.Localization
             //Language names
             output.LanguageNames = _applicationCulturesProvider
                 .GetAllCultures()
-                .Select(c => new ComboboxItemDto(c.Name, c.EnglishName + " (" + c.Name + ")") { IsSelected = output.Language.Name == c.Name })
+                .Select(c => new ComboboxItemDto(c.Name, c.EnglishName + " (" + c.Name + ")")
+                    {IsSelected = output.Language.Name == c.Name})
                 .ToList();
 
             //Flags
             output.Flags = FamFamFamFlagsHelper
                 .FlagClassNames
                 .OrderBy(f => f)
-                .Select(f => new ComboboxItemDto(f, FamFamFamFlagsHelper.GetCountryCode(f)) { IsSelected = output.Language.Icon == f })
+                .Select(f => new ComboboxItemDto(f, FamFamFamFlagsHelper.GetCountryCode(f))
+                    {IsSelected = output.Language.Icon == f})
                 .ToList();
 
             return output;
@@ -98,12 +102,13 @@ namespace CoreOSR.Localization
             await _applicationLanguageManager.RemoveAsync(AbpSession.TenantId, language.Name);
         }
 
+        [AbpAuthorize(AppPermissions.Pages_Administration_Languages_ChangeDefaultLanguage)]
         public async Task SetDefaultLanguage(SetDefaultLanguageInput input)
         {
             await _applicationLanguageManager.SetDefaultLanguageAsync(
                 AbpSession.TenantId,
-               CultureHelper.GetCultureInfoByChecking(input.Name).Name
-                );
+                CultureHelper.GetCultureInfoByChecking(input.Name).Name
+            );
         }
 
         [AbpAuthorize(AppPermissions.Pages_Administration_Languages_ChangeTexts)]
@@ -115,10 +120,12 @@ namespace CoreOSR.Localization
             //Normalize base language name
             if (input.BaseLanguageName.IsNullOrEmpty())
             {
-                var defaultLanguage = await _applicationLanguageManager.GetDefaultLanguageOrNullAsync(AbpSession.TenantId);
+                var defaultLanguage =
+                    await _applicationLanguageManager.GetDefaultLanguageOrNullAsync(AbpSession.TenantId);
                 if (defaultLanguage == null)
                 {
-                    defaultLanguage = (await _applicationLanguageManager.GetLanguagesAsync(AbpSession.TenantId)).FirstOrDefault();
+                    defaultLanguage = (await _applicationLanguageManager.GetLanguagesAsync(AbpSession.TenantId))
+                        .FirstOrDefault();
                     if (defaultLanguage == null)
                     {
                         throw new Exception("No language found in the application!");
@@ -132,15 +139,27 @@ namespace CoreOSR.Localization
             var baseCulture = CultureInfo.GetCultureInfo(input.BaseLanguageName);
             var targetCulture = CultureInfo.GetCultureInfo(input.TargetLanguageName);
 
-            var languageTexts = source
-                .GetAllStrings()
-                .Select(localizedString => new LanguageTextListDto
-                {
-                    Key = localizedString.Name,
-                    BaseValue = _applicationLanguageTextManager.GetStringOrNull(AbpSession.TenantId, source.Name, baseCulture, localizedString.Name),
-                    TargetValue = _applicationLanguageTextManager.GetStringOrNull(AbpSession.TenantId, source.Name, targetCulture, localizedString.Name, false)
-                })
-                .AsQueryable();
+            var allStrings = source.GetAllStrings();
+            var baseValues = _applicationLanguageTextManager.GetStringsOrNull(
+                AbpSession.TenantId,
+                source.Name,
+                baseCulture,
+                allStrings.Select(x => x.Name).ToList()
+            );
+
+            var targetValues = _applicationLanguageTextManager.GetStringsOrNull(
+                AbpSession.TenantId,
+                source.Name,
+                targetCulture,
+                allStrings.Select(x => x.Name).ToList()
+            );
+
+            var languageTexts = allStrings.Select((t, i) => new LanguageTextListDto
+            {
+                Key = t.Name,
+                BaseValue = GetValueOrNull(baseValues, i),
+                TargetValue = GetValueOrNull(targetValues, i) ?? GetValueOrNull(baseValues, i) 
+            }).AsQueryable();
 
             //Filters
             if (input.TargetValueFilter == "EMPTY")
@@ -151,10 +170,13 @@ namespace CoreOSR.Localization
             if (!input.FilterText.IsNullOrEmpty())
             {
                 languageTexts = languageTexts.Where(
-                    l => (l.Key != null && l.Key.IndexOf(input.FilterText, StringComparison.CurrentCultureIgnoreCase) >= 0) ||
-                         (l.BaseValue != null && l.BaseValue.IndexOf(input.FilterText, StringComparison.CurrentCultureIgnoreCase) >= 0) ||
-                         (l.TargetValue != null && l.TargetValue.IndexOf(input.FilterText, StringComparison.CurrentCultureIgnoreCase) >= 0)
-                    );
+                    l => (l.Key != null &&
+                          l.Key.IndexOf(input.FilterText, StringComparison.CurrentCultureIgnoreCase) >= 0) ||
+                         (l.BaseValue != null &&
+                          l.BaseValue.IndexOf(input.FilterText, StringComparison.CurrentCultureIgnoreCase) >= 0) ||
+                         (l.TargetValue != null &&
+                          l.TargetValue.IndexOf(input.FilterText, StringComparison.CurrentCultureIgnoreCase) >= 0)
+                );
             }
 
             var totalCount = languageTexts.Count();
@@ -179,14 +201,21 @@ namespace CoreOSR.Localization
             return new PagedResultDto<LanguageTextListDto>(
                 totalCount,
                 languageTexts.ToList()
-                );
+            );
         }
 
+        [AbpAuthorize(AppPermissions.Pages_Administration_Languages_ChangeTexts)]
         public async Task UpdateLanguageText(UpdateLanguageTextInput input)
         {
             var culture = CultureHelper.GetCultureInfoByChecking(input.LanguageName);
             var source = LocalizationManager.GetSource(input.SourceName);
-            await _applicationLanguageTextManager.UpdateStringAsync(AbpSession.TenantId, source.Name, culture, input.Key, input.Value);
+            await _applicationLanguageTextManager.UpdateStringAsync(
+                AbpSession.TenantId,
+                source.Name,
+                culture,
+                input.Key,
+                input.Value
+            );
         }
 
         [AbpAuthorize(AppPermissions.Pages_Administration_Languages_Create)]
@@ -249,6 +278,11 @@ namespace CoreOSR.Localization
             }
 
             throw new UserFriendlyException(L("ThisLanguageAlreadyExists"));
+        }
+
+        private string GetValueOrNull(List<string> items, int index)
+        {
+            return items.Count > index ? items[index] : null;
         }
     }
 }

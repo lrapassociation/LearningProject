@@ -1,4 +1,4 @@
-import { Injector, Component, ViewEncapsulation, Inject } from '@angular/core';
+import { Injector, Component, ViewEncapsulation, Inject, Input, OnInit } from '@angular/core';
 import { AppConsts } from '@shared/AppConsts';
 import { AppComponentBase } from '@shared/common/app-component-base';
 
@@ -7,25 +7,21 @@ import { DOCUMENT } from '@angular/common';
 @Component({
     templateUrl: './theme6-brand.component.html',
     selector: 'theme6-brand',
-    encapsulation: ViewEncapsulation.None
+    encapsulation: ViewEncapsulation.None,
 })
-export class Theme6BrandComponent extends AppComponentBase {
+export class Theme6BrandComponent extends AppComponentBase implements OnInit {
+    @Input() anchorClass = 'd-flex align-items-center';
+    @Input() skin = 'dark';
+    @Input() imageClass = 'h-45px logo';
 
-    defaultLogo = AppConsts.appBaseUrl + '/assets/common/images/app-logo-on-light-sm.svg';
+    defaultLogo = '';
     remoteServiceBaseUrl: string = AppConsts.remoteServiceBaseUrl;
 
-    constructor(
-        injector: Injector,
-        @Inject(DOCUMENT) private document: Document
-    ) {
+    constructor(injector: Injector, @Inject(DOCUMENT) private document: Document) {
         super(injector);
     }
 
-    clickTopbarToggle(): void {
-        this.document.body.classList.toggle('m-topbar--on');
-    }
-
-    clickLeftAsideHideToggle(): void {
-        this.document.body.classList.toggle('m-aside-left--hide');
+    ngOnInit(): void {
+        this.defaultLogo = AppConsts.appBaseUrl + '/assets/common/images/app-logo-on-' + this.skin + '-sm.svg';
     }
 }

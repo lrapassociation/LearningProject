@@ -1,7 +1,8 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Threading.Tasks;
 using Abp;
 using Abp.Authorization;
+using Abp.Extensions;
 using Abp.MultiTenancy;
 using Abp.RealTime;
 using Abp.Runtime.Session;
@@ -55,26 +56,36 @@ namespace CoreOSR.Friendships
                 probableFriendUser = await UserManager.FindByIdAsync(input.UserId.ToString());
             }
 
-            var friendTenancyName = probableFriend.TenantId.HasValue ? _tenantCache.Get(probableFriend.TenantId.Value).TenancyName : null;
-            var sourceFriendship = new Friendship(userIdentifier, probableFriend, friendTenancyName, probableFriendUser.UserName, probableFriendUser.ProfilePictureId, FriendshipState.Accepted);
+            // Friend requester
+            var friendTenancyName = await GetTenancyNameAsync(probableFriend.TenantId);
+            var sourceFriendship = new Friendship(userIdentifier, probableFriend, friendTenancyName,
+                probableFriendUser.UserName, probableFriendUser.ProfilePictureId, FriendshipState.Accepted);
             await _friendshipManager.CreateFriendshipAsync(sourceFriendship);
 
-            var userTenancyName = user.TenantId.HasValue ? _tenantCache.Get(user.TenantId.Value).TenancyName : null;
-            var targetFriendship = new Friendship(probableFriend, userIdentifier, userTenancyName, user.UserName, user.ProfilePictureId, FriendshipState.Accepted);
-            await _friendshipManager.CreateFriendshipAsync(targetFriendship);
+            // Target friend
+            var userTenancyName = await GetTenancyNameAsync(user.TenantId);
+            var targetFriendship = new Friendship(probableFriend, userIdentifier, userTenancyName, user.UserName,
+                user.ProfilePictureId, FriendshipState.Accepted);
 
-            var clients = _onlineClientManager.GetAllByUserId(probableFriend);
-            if (clients.Any())
+            if (await _friendshipManager.GetFriendshipOrNullAsync(probableFriend, userIdentifier) == null)
             {
-                var isFriendOnline = _onlineClientManager.IsOnline(sourceFriendship.ToUserIdentifier());
-                await _chatCommunicator.SendFriendshipRequestToClient(clients, targetFriendship, false, isFriendOnline);
+                await _friendshipManager.CreateFriendshipAsync(targetFriendship);
+
+                var clients = _onlineClientManager.GetAllByUserId(probableFriend);
+                if (clients.Any())
+                {
+                    var isFriendOnline = _onlineClientManager.IsOnline(sourceFriendship.ToUserIdentifier());
+                    await _chatCommunicator.SendFriendshipRequestToClient(clients, targetFriendship, false,
+                        isFriendOnline);
+                }
             }
 
             var senderClients = _onlineClientManager.GetAllByUserId(userIdentifier);
             if (senderClients.Any())
             {
                 var isFriendOnline = _onlineClientManager.IsOnline(targetFriendship.ToUserIdentifier());
-                await _chatCommunicator.SendFriendshipRequestToClient(senderClients, sourceFriendship, true, isFriendOnline);
+                await _chatCommunicator.SendFriendshipRequestToClient(senderClients, sourceFriendship, true,
+                    isFriendOnline);
             }
 
             var sourceFriendshipRequest = ObjectMapper.Map<FriendDto>(sourceFriendship);
@@ -83,7 +94,18 @@ namespace CoreOSR.Friendships
             return sourceFriendshipRequest;
         }
 
-        public async Task<FriendDto> CreateFriendshipRequestByUserName(CreateFriendshipRequestByUserNameInput input)
+        private async Task<string> GetTenancyNameAsync(int? tenantId)
+        {
+            if (tenantId.HasValue)
+            {
+                var tenant = await _tenantCache.GetAsync(tenantId.Value);
+                return tenant.TenancyName;
+            }
+
+            return null;
+        }
+
+        public async Task<FriendDto> CreateFriendshipWithDifferentTenant(CreateFriendshipWithDifferentTenantInput input)
         {
             var probableFriend = await GetUserIdentifier(input.TenancyName, input.UserName);
             return await CreateFriendshipRequest(new CreateFriendshipRequestInput
@@ -91,6 +113,27 @@ namespace CoreOSR.Friendships
                 TenantId = probableFriend.TenantId,
                 UserId = probableFriend.UserId
             });
+        }
+
+        public async Task<FriendDto> CreateFriendshipForCurrentTenant(CreateFriendshipForCurrentTenantInput input)
+        {
+            using (CurrentUnitOfWork.SetTenantId(AbpSession.TenantId))
+            {
+                var user = await UserManager.FindByNameOrEmailAsync(input.UserName);
+                if (user == null)
+                {
+                    throw new UserFriendlyException(L("ThereIsNoUserRegisteredWithNameOrEmail{0}", input.UserName));
+                }
+
+                var probableFriend = user.ToUserIdentifier();
+                
+                return await CreateFriendshipRequest(new CreateFriendshipRequestInput
+                {
+                    TenantId = probableFriend.TenantId,
+                    UserId = probableFriend.UserId
+                });
+            }
+            
         }
 
         public async Task BlockUser(BlockUserInput input)
@@ -102,7 +145,8 @@ namespace CoreOSR.Friendships
             var clients = _onlineClientManager.GetAllByUserId(userIdentifier);
             if (clients.Any())
             {
-                await _chatCommunicator.SendUserStateChangeToClients(clients, friendIdentifier, FriendshipState.Blocked);
+                await _chatCommunicator.SendUserStateChangeToClients(clients, friendIdentifier,
+                    FriendshipState.Blocked);
             }
         }
 
@@ -115,7 +159,8 @@ namespace CoreOSR.Friendships
             var clients = _onlineClientManager.GetAllByUserId(userIdentifier);
             if (clients.Any())
             {
-                await _chatCommunicator.SendUserStateChangeToClients(clients, friendIdentifier, FriendshipState.Accepted);
+                await _chatCommunicator.SendUserStateChangeToClients(clients, friendIdentifier,
+                    FriendshipState.Accepted);
             }
         }
 
@@ -128,14 +173,18 @@ namespace CoreOSR.Friendships
             var clients = _onlineClientManager.GetAllByUserId(userIdentifier);
             if (clients.Any())
             {
-                await _chatCommunicator.SendUserStateChangeToClients(clients, friendIdentifier, FriendshipState.Blocked);
+                await _chatCommunicator.SendUserStateChangeToClients(clients, friendIdentifier,
+                    FriendshipState.Blocked);
             }
         }
 
         private async Task<UserIdentifier> GetUserIdentifier(string tenancyName, string userName)
         {
             int? tenantId = null;
-            if (!tenancyName.Equals("."))
+            
+            await CheckFeatures(tenancyName);
+
+            if (!tenancyName.IsNullOrEmpty())
             {
                 using (CurrentUnitOfWork.SetTenantId(null))
                 {
@@ -148,17 +197,53 @@ namespace CoreOSR.Friendships
                     tenantId = tenant.Id;
                 }
             }
-
+            
             using (CurrentUnitOfWork.SetTenantId(tenantId))
             {
                 var user = await UserManager.FindByNameOrEmailAsync(userName);
                 if (user == null)
                 {
-                    throw new UserFriendlyException(L("ThereIsNoTenantDefinedWithName{0}", tenancyName));
+                    throw new UserFriendlyException(L("ThereIsNoUserRegisteredWithNameOrEmail{0}", userName));
                 }
 
                 return user.ToUserIdentifier();
             }
+        }
+
+        private async Task CheckFeatures(string tenancyName)
+        {
+            if (AbpSession.TenantId == null)
+            {
+                return;
+            }
+            
+            var tenantToTenantAllowed = await FeatureChecker.IsEnabledAsync
+                ("App.ChatFeature.TenantToTenant");
+            
+            var tenantToHostAllowed = await FeatureChecker.IsEnabledAsync
+                ("App.ChatFeature.TenantToHost");
+
+            if (tenancyName.IsNullOrEmpty())
+            {
+                if (!tenantToHostAllowed)
+                {
+                    throw new UserFriendlyException(L("TenantToHostChatIsNotEnabled"));
+                }
+            }
+            else
+            {
+                if (!tenantToTenantAllowed)
+                {
+                    throw new UserFriendlyException(L("TenantToTenantChatIsNotEnabled"));
+                }
+            }
+        }
+
+        public async Task RemoveFriend(RemoveFriendInput input)
+        {
+            var userIdentifier = AbpSession.ToUserIdentifier();
+            var friendIdentifier = new UserIdentifier(input.TenantId, input.UserId);
+            await _friendshipManager.RemoveFriendAsync(userIdentifier, friendIdentifier);
         }
     }
 }

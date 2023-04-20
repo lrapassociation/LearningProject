@@ -1,23 +1,24 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Abp.BackgroundJobs;
 using Abp.Dependency;
 using Abp.Domain.Repositories;
 using Abp.Domain.Uow;
 using Abp.Events.Bus;
-using Abp.Threading;
 using CoreOSR.MultiTenancy;
 using CoreOSR.Notifications;
 
 namespace CoreOSR.Editions
 {
-    public class MoveTenantsToAnotherEditionJob : BackgroundJob<MoveTenantsToAnotherEditionJobArgs>, ITransientDependency
+    public class MoveTenantsToAnotherEditionJob : AsyncBackgroundJob<MoveTenantsToAnotherEditionJobArgs>, ITransientDependency
     {
         private readonly IRepository<Tenant> _tenantRepository;
         private readonly EditionManager _editionManager;
         private readonly IAppNotifier _appNotifier;
         private readonly IUnitOfWorkManager _unitOfWorkManager;
+        
         public IEventBus EventBus { get; set; }
 
         public MoveTenantsToAnotherEditionJob(
@@ -34,7 +35,7 @@ namespace CoreOSR.Editions
             EventBus = NullEventBus.Instance;
         }
 
-        public override void Execute(MoveTenantsToAnotherEditionJobArgs args)
+        public override async Task ExecuteAsync(MoveTenantsToAnotherEditionJobArgs args)
         {
             if (args.SourceEditionId == args.TargetEditionId)
             {
@@ -45,8 +46,12 @@ namespace CoreOSR.Editions
 
             using (var uow = _unitOfWorkManager.Begin())
             {
-                tenantIds = _tenantRepository.GetAll().Where(t => t.EditionId == args.SourceEditionId).Select(t => t.Id).ToList();
-                uow.Complete();
+                tenantIds = _tenantRepository.GetAll()
+                    .Where(t => t.EditionId == args.SourceEditionId)
+                    .Select(t => t.Id)
+                    .ToList();
+                
+                await uow.CompleteAsync();
             }
 
             if (!tenantIds.Any())
@@ -54,7 +59,7 @@ namespace CoreOSR.Editions
                 return;
             }
 
-            var changedTenantCount = ChangeEditionOfTenants(tenantIds, args.SourceEditionId, args.TargetEditionId);
+            var changedTenantCount = await ChangeEditionOfTenantsAsync(tenantIds, args.SourceEditionId, args.TargetEditionId);
 
             if (changedTenantCount != tenantIds.Count)
             {
@@ -62,10 +67,10 @@ namespace CoreOSR.Editions
                 return;
             }
 
-            NotifyUser(args);
+            await NotifyUserAsync(args);
         }
 
-        private int ChangeEditionOfTenants(List<int> tenantIds, int sourceEditionId, int targetEditionId)
+        private async Task<int> ChangeEditionOfTenantsAsync(List<int> tenantIds, int sourceEditionId, int targetEditionId)
         {
             var changedTenantCount = 0;
 
@@ -73,44 +78,46 @@ namespace CoreOSR.Editions
             {
                 using (var uow = _unitOfWorkManager.Begin())
                 {
-                    var changed = ChangeEditionOfTenant(tenantId, sourceEditionId, targetEditionId);
+                    var changed = await ChangeEditionOfTenantAsync(tenantId, sourceEditionId, targetEditionId);
                     if (changed)
                     {
                         changedTenantCount++;
                     }
 
-                    uow.Complete();
+                    await uow.CompleteAsync();
                 }
             }
 
             return changedTenantCount;
         }
 
-        private void NotifyUser(MoveTenantsToAnotherEditionJobArgs args)
+        private async Task NotifyUserAsync(MoveTenantsToAnotherEditionJobArgs args)
         {
             using (var uow = _unitOfWorkManager.Begin())
             {
-                var sourceEdition = AsyncHelper.RunSync(() => _editionManager.GetByIdAsync(args.SourceEditionId));
-                var targetEdition = AsyncHelper.RunSync(() => _editionManager.GetByIdAsync(args.TargetEditionId));
+                var sourceEdition = await _editionManager.GetByIdAsync(args.SourceEditionId);
+                var targetEdition = await _editionManager.GetByIdAsync(args.TargetEditionId);
 
-                AsyncHelper.RunSync(() =>
-                    _appNotifier.TenantsMovedToEdition(args.User, sourceEdition.DisplayName, targetEdition.DisplayName)
+                await _appNotifier.TenantsMovedToEdition(
+                    args.User,
+                    sourceEdition.DisplayName,
+                    targetEdition.DisplayName
                 );
 
-                uow.Complete();
+                await uow.CompleteAsync();
             }
         }
 
-        private bool ChangeEditionOfTenant(int tenantId, int sourceEditionId, int targetEditionId)
+        private async Task<bool> ChangeEditionOfTenantAsync(int tenantId, int sourceEditionId, int targetEditionId)
         {
             try
             {
-                var tenant = _tenantRepository.Get(tenantId);
+                var tenant = await _tenantRepository.GetAsync(tenantId);
                 tenant.EditionId = targetEditionId;
 
-                CurrentUnitOfWork.SaveChanges();
+                await CurrentUnitOfWork.SaveChangesAsync();
 
-                EventBus.Trigger(new TenantEditionChangedEventData
+                await EventBus.TriggerAsync(new TenantEditionChangedEventData
                 {
                     TenantId = tenant.Id,
                     OldEditionId = sourceEditionId,

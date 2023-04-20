@@ -6,8 +6,9 @@ namespace CoreOSR.Web.Controllers
     {
         public StripeController(
             StripeGatewayManager stripeGatewayManager,
-            StripePaymentGatewayConfiguration stripeConfiguration)
-            : base(stripeGatewayManager, stripeConfiguration)
+            StripePaymentGatewayConfiguration stripeConfiguration,
+            IStripePaymentAppService stripePaymentAppService) 
+            : base(stripeGatewayManager, stripeConfiguration, stripePaymentAppService)
         {
         }
     }

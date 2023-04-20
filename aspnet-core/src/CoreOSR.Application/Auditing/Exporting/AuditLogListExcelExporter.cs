@@ -3,13 +3,13 @@ using Abp.Extensions;
 using Abp.Runtime.Session;
 using Abp.Timing.Timezone;
 using CoreOSR.Auditing.Dto;
-using CoreOSR.DataExporting.Excel.EpPlus;
+using CoreOSR.DataExporting.Excel.MiniExcel;
 using CoreOSR.Dto;
 using CoreOSR.Storage;
 
 namespace CoreOSR.Auditing.Exporting
 {
-    public class AuditLogListExcelExporter : EpPlusExcelExporterBase, IAuditLogListExcelExporter
+    public class AuditLogListExcelExporter : MiniExcelExcelExporterBase, IAuditLogListExcelExporter
     {
         private readonly ITimeZoneConverter _timeZoneConverter;
         private readonly IAbpSession _abpSession;
@@ -24,100 +24,46 @@ namespace CoreOSR.Auditing.Exporting
             _abpSession = abpSession;
         }
 
-        public FileDto ExportToFile(List<AuditLogListDto> auditLogListDtos)
+        public FileDto ExportToFile(List<AuditLogListDto> auditLogList)
         {
-            return CreateExcelPackage(
-                "AuditLogs.xlsx",
-                excelPackage =>
+            var items = new List<Dictionary<string, object>>();
+
+            foreach (var auditLog in auditLogList)
+            {
+                items.Add(new Dictionary<string, object>()
                 {
-                    var sheet = excelPackage.Workbook.Worksheets.Add(L("AuditLogs"));
-                    sheet.OutLineApplyStyle = true;
-
-                    AddHeader(
-                        sheet,
-                        L("Time"),
-                        L("UserName"),
-                        L("Service"),
-                        L("Action"),
-                        L("Parameters"),
-                        L("Duration"),
-                        L("IpAddress"),
-                        L("Client"),
-                        L("Browser"),
-                        L("ErrorState")
-                    );
-
-                    AddObjects(
-                        sheet, 2, auditLogListDtos,
-                        _ => _timeZoneConverter.Convert(_.ExecutionTime, _abpSession.TenantId, _abpSession.GetUserId()),
-                        _ => _.UserName,
-                        _ => _.ServiceName,
-                        _ => _.MethodName,
-                        _ => _.Parameters,
-                        _ => _.ExecutionDuration,
-                        _ => _.ClientIpAddress,
-                        _ => _.ClientName,
-                        _ => _.BrowserInfo,
-                        _ => _.Exception.IsNullOrEmpty() ? L("Success") : _.Exception
-                        );
-
-                    //Formatting cells
-
-                    var timeColumn = sheet.Column(1);
-                    timeColumn.Style.Numberformat.Format = "yyyy-mm-dd hh:mm:ss";
-
-                    for (var i = 1; i <= 10; i++)
-                    {
-                        if (i.IsIn(5, 10)) //Don't AutoFit Parameters and Exception
-                        {
-                            continue;
-                        }
-
-                        sheet.Column(i).AutoFit();
-                    }
+                    {L("Time"), _timeZoneConverter.Convert(auditLog.ExecutionTime, _abpSession.TenantId, _abpSession.GetUserId())},
+                    {L("UserName"), auditLog.UserName},
+                    {L("Service"), auditLog.ServiceName},
+                    {L("Action"), auditLog.MethodName},
+                    {L("Parameters"), auditLog.Parameters},
+                    {L("Duration"), auditLog.ExecutionDuration},
+                    {L("IpAddress"), auditLog.ClientIpAddress},
+                    {L("Client"), auditLog.ClientName},
+                    {L("Browser"), auditLog.BrowserInfo},
+                    {L("ErrorState"), auditLog.Exception.IsNullOrEmpty() ? L("Success") : auditLog.Exception},
                 });
+            }
+
+            return CreateExcelPackage("AuditLogs.xlsx", items);
         }
 
-        public FileDto ExportToFile(List<EntityChangeListDto> entityChangeListDtos)
+        public FileDto ExportToFile(List<EntityChangeListDto> entityChangeList)
         {
-            return CreateExcelPackage(
-                "DetailedLogs.xlsx",
-                excelPackage =>
+            var items = new List<Dictionary<string, object>>();
+
+            foreach (var entityChange in entityChangeList)
+            {
+                items.Add(new Dictionary<string, object>()
                 {
-                    var sheet = excelPackage.Workbook.Worksheets.Add(L("DetailedLogs"));
-                    sheet.OutLineApplyStyle = true;
-
-                    AddHeader(
-                        sheet,
-                        L("Action"),
-                        L("Object"),
-                        L("UserName"),
-                        L("Time")
-                    );
-
-                    AddObjects(
-                        sheet, 2, entityChangeListDtos,
-                        _ => _.ChangeType.ToString(),
-                        _ => _.EntityTypeFullName,
-                        _ => _.UserName,
-                        _ => _timeZoneConverter.Convert(_.ChangeTime, _abpSession.TenantId, _abpSession.GetUserId())
-                    );
-
-                    //Formatting cells
-
-                    var timeColumn = sheet.Column(1);
-                    timeColumn.Style.Numberformat.Format = "yyyy-mm-dd hh:mm:ss";
-
-                    for (var i = 1; i <= 10; i++)
-                    {
-                        if (i.IsIn(5, 10)) //Don't AutoFit Parameters and Exception
-                        {
-                            continue;
-                        }
-
-                        sheet.Column(i).AutoFit();
-                    }
+                    {L("Action"), entityChange.ChangeType.ToString()},
+                    {L("Object"), entityChange.EntityTypeFullName},
+                    {L("UserName"), entityChange.UserName},
+                    {L("Time"), _timeZoneConverter.Convert(entityChange.ChangeTime, _abpSession.TenantId, _abpSession.GetUserId())},
                 });
+            }
+
+            return CreateExcelPackage("DetailedLogs.xlsx", items);
         }
     }
 }

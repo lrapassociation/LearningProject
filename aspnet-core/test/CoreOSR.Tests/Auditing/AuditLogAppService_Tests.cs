@@ -5,7 +5,6 @@ using Abp.Authorization.Users;
 using Abp.Timing;
 using CoreOSR.Auditing;
 using CoreOSR.Auditing.Dto;
-using CoreOSR.Test.Base;
 using Shouldly;
 using Xunit;
 

@@ -1,17 +1,16 @@
 import { Component, ElementRef, EventEmitter, Injector, Output, ViewChild } from '@angular/core';
 import { AppComponentBase } from '@shared/common/app-component-base';
 import { LanguageServiceProxy, UpdateLanguageTextInput } from '@shared/service-proxies/service-proxies';
-import * as _ from 'lodash';
-import { ModalDirective } from 'ngx-bootstrap';
+import { find as _find } from 'lodash-es';
+import { ModalDirective } from 'ngx-bootstrap/modal';
 import { finalize } from 'rxjs/operators';
 
 @Component({
     selector: 'editTextModal',
-    templateUrl: './edit-text-modal.component.html'
+    templateUrl: './edit-text-modal.component.html',
 })
 export class EditTextModalComponent extends AppComponentBase {
-
-    @ViewChild('modal', {static: true}) modal: ModalDirective;
+    @ViewChild('modal', { static: true }) modal: ModalDirective;
 
     @Output() modalSave: EventEmitter<any> = new EventEmitter<any>();
 
@@ -24,22 +23,26 @@ export class EditTextModalComponent extends AppComponentBase {
     active = false;
     saving = false;
 
-    constructor(
-        injector: Injector,
-        private _languageService: LanguageServiceProxy
-    ) {
+    constructor(injector: Injector, private _languageService: LanguageServiceProxy) {
         super(injector);
     }
 
-    show(baseLanguageName: string, targetLanguageName: string, sourceName: string, key: string, baseText: string, targetText: string): void {
+    show(
+        baseLanguageName: string,
+        targetLanguageName: string,
+        sourceName: string,
+        key: string,
+        baseText: string,
+        targetText: string
+    ): void {
         this.model.sourceName = sourceName;
         this.model.key = key;
         this.model.languageName = targetLanguageName;
         this.model.value = targetText;
 
         this.baseText = baseText;
-        this.baseLanguage = _.find(abp.localization.languages, l => l.name === baseLanguageName);
-        this.targetLanguage = _.find(abp.localization.languages, l => l.name === targetLanguageName);
+        this.baseLanguage = _find(abp.localization.languages, (l) => l.name === baseLanguageName);
+        this.targetLanguage = _find(abp.localization.languages, (l) => l.name === targetLanguageName);
 
         this.active = true;
 
@@ -52,8 +55,9 @@ export class EditTextModalComponent extends AppComponentBase {
 
     save(): void {
         this.saving = true;
-        this._languageService.updateLanguageText(this.model)
-            .pipe(finalize(() => this.saving = false))
+        this._languageService
+            .updateLanguageText(this.model)
+            .pipe(finalize(() => (this.saving = false)))
             .subscribe(() => {
                 this.notify.info(this.l('SavedSuccessfully'));
                 this.close();
@@ -67,6 +71,6 @@ export class EditTextModalComponent extends AppComponentBase {
     }
 
     private findLanguage(name: string): abp.localization.ILanguageInfo {
-        return _.find(abp.localization.languages, l => l.name === name);
+        return _find(abp.localization.languages, (l) => l.name === name);
     }
 }

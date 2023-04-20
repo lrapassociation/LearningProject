@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Abp.Extensions;
 using Microsoft.Extensions.Configuration;
 using CoreOSR.Configuration;
@@ -19,8 +20,10 @@ namespace CoreOSR.MultiTenancy.Payments.Stripe
         public string WebhookSecret => _appConfiguration["Payment:Stripe:WebhookSecret"];
 
         public bool IsActive => _appConfiguration["Payment:Stripe:IsActive"].To<bool>();
-        
+
         public bool SupportsRecurringPayments => true;
+
+        public List<string> PaymentMethodTypes => _appConfiguration.GetSection("Payment:Stripe:PaymentMethodTypes").Get<List<string>>();
 
         public StripePaymentGatewayConfiguration(IAppConfigurationAccessor configurationAccessor)
         {

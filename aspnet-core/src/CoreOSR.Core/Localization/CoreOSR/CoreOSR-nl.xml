@@ -180,7 +180,6 @@
     <text name="RequestedFileDoesNotExists">Opgevraagd bestand bestaat niet!</text>
     <text name="MailSent">Email verstuurd</text>
     <text name="PasswordResetMailSentMessage">Een wachtwoord hertellink vertuurd naar uw emailadres. Controleer uw email.</text>
-    <text name="ActivationMailSentMessage">Een wachtwoord activatielink vertuurd naar uw emailadres. Controleer uw email.</text>
     <text name="UseCaptchaOnRegistration">Gebruik beveiligingsafbeelding-vraag (captcha) bij registratie.</text>
     <text name="FormBasedRegistration">Formulier-gebaseerde registratie</text>
     <text name="LdapSettings">LDAP Instellingen</text>
@@ -260,7 +259,6 @@
     <text name="Language">Taal</text>
     <text name="Flag">Vlag</text>
     <text name="SetAsDefaultLanguage">Instellen als standaardtaal</text>
-    <text name="InvlalidLanguageCode">Ongeldige taalcode.</text>
     <text name="EditLanguage">Bewerk taal</text>
     <text name="ChangeTexts">Verander tekst</text>
     <text name="TargetValue">Streefwaarde</text>
@@ -339,7 +337,7 @@
     <text name="NotificationTypes">Notificatie Types</text>
     <text name="ReceiveNotifications_DisableInfo">U kunt notificaties ontvangen volledig uitschakelen. U kunt dit inschakelen en de meldingstypen selecteren die u wilt ontvangen.</text>
     <text name="Notifications">Notificaties</text>
-    <text name="ThereIsNoNotification">Er zijn geen notificaties.</text>
+    <text name="ThereAreNoNotifications">Er zijn geen notificaties.</text>
     <text name="Unread">Ongelezen</text>
     <text name="YouCanNotDeleteOwnAccount">U kan niet uw eigen account verwijderen!</text>
     <text name="On">Aan</text>
@@ -450,7 +448,7 @@
     <text name="Unlock">Ontgrendelen</text>
     <text name="UnlockedTheUser">Ontgrendelen de gebruiker {0}</text>
     <text name="UserLockOut">Gebruikersvergrendeling</text>
-    <text name="EnableUserAccountLockingOnFailedLoginAttemts">Schakel gebruikersaccounts vergrendeling in bij mislukte inlogpogingen</text>
+    <text name="EnableUserAccountLockingOnFailedLoginAttempts">Schakel gebruikersaccounts vergrendeling in bij mislukte inlogpogingen</text>
     <text name="MaxFailedAccessAttemptsBeforeLockout">Maximale aantal mislukte inlogpogingen telt voordat het account wordt vergrendeld</text>
     <text name="DefaultAccountLockoutDurationAsSeconds">Account vergrendelingsduur (als seconds)</text>
     <text name="TwoFactorLogin">Twee factor Login</text>

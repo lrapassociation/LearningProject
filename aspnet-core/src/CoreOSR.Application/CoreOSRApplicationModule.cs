@@ -9,6 +9,7 @@ namespace CoreOSR
     /// Application layer module of the application.
     /// </summary>
     [DependsOn(
+        typeof(CoreOSRApplicationSharedModule),
         typeof(CoreOSRCoreModule)
         )]
     public class CoreOSRApplicationModule : AbpModule

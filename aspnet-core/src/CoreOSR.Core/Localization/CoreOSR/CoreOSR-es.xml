@@ -180,7 +180,6 @@
     <text name="RequestedFileDoesNotExists">El archivo solicitado no existe!</text>
     <text name="MailSent">Correo enviado</text>
     <text name="PasswordResetMailSentMessage">Un email con un enlace para reiniciar su contraseña ha sido enviado. Por favor, chequee su correo electrónico.</text>
-    <text name="ActivationMailSentMessage">Un email con un enlace para activar su dirección de email ha sido enviado a su correo electrónico. Por favor, chequee su correo electrónico.</text>
     <text name="UseCaptchaOnRegistration">Usar la imagen de seguridad (captcha) al registrarse.</text>
     <text name="FormBasedRegistration">Registro por formulario</text>
     <text name="LdapSettings">Configuración LDAP</text>
@@ -260,7 +259,6 @@
     <text name="Language">Lenguaje</text>
     <text name="Flag">Marca</text>
     <text name="SetAsDefaultLanguage">Establecer como lenguaje predeterminado</text>
-    <text name="InvlalidLanguageCode">Código de lenguaje no válido.</text>
     <text name="EditLanguage">Editar lenguaje</text>
     <text name="ChangeTexts">Cambiar textos</text>
     <text name="TargetValue">Nuevo valor</text>
@@ -340,7 +338,7 @@
     <text name="NotificationTypes">Tipos de notificaciones</text>
     <text name="ReceiveNotifications_DisableInfo">Ud. ha deshabilitado recibir notificaciones. Ud. puede habilitarlo y seleccionar el tipo de notificaciones que desea recibir.</text>
     <text name="Notifications">Notificationes</text>
-    <text name="ThereIsNoNotification">No hay notificación.</text>
+    <text name="ThereAreNoNotifications">No hay notificación.</text>
     <text name="Unread">No leído</text>
     <text name="YouCanNotDeleteOwnAccount">No puede borrar su propia cuenta!</text>
     <text name="On">On</text>
@@ -451,7 +449,7 @@
     <text name="Unlock">Desbloquear</text>
     <text name="UnlockedTheUser">Desbloquear usuario {0}</text>
     <text name="UserLockOut">Bloqueado de usuario</text>
-    <text name="EnableUserAccountLockingOnFailedLoginAttemts">Habilitar bloqueado de cuenta por intentos fallidos al iniciar sesión.</text>
+    <text name="EnableUserAccountLockingOnFailedLoginAttempts">Habilitar bloqueado de cuenta por intentos fallidos al iniciar sesión.</text>
     <text name="MaxFailedAccessAttemptsBeforeLockout">Número máximo de intentos fallidos antes de bloquear la cuenta</text>
     <text name="DefaultAccountLockoutDurationAsSeconds">Duración de bloqueado de cuenta (en segundos)</text>
     <text name="TwoFactorLogin">Inicio de sesión de dos factores.</text>

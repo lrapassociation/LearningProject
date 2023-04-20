@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Abp.Application.Services.Dto;
 using Abp.Domain.Entities;
 using Abp.Domain.Entities.Auditing;
+using Abp.Timing;
 
 namespace CoreOSR.Authorization.Users.Dto
 {
@@ -15,6 +16,8 @@ namespace CoreOSR.Authorization.Users.Dto
         public string UserName { get; set; }
 
         public string EmailAddress { get; set; }
+        
+        public DateTime? LockoutEndDateUtc { get; set; }
 
         public string PhoneNumber { get; set; }
 

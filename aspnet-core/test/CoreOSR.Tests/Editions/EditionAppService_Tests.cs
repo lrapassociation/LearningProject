@@ -1,15 +1,15 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Abp.Application.Services.Dto;
+﻿using Abp.Application.Services.Dto;
 using Abp.Domain.Repositories;
+using Abp.Localization;
 using Abp.UI;
 using Microsoft.EntityFrameworkCore;
 using CoreOSR.Editions;
 using CoreOSR.Editions.Dto;
 using CoreOSR.Features;
-using CoreOSR.Test.Base;
 using Shouldly;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace CoreOSR.Tests.Editions
@@ -19,6 +19,7 @@ namespace CoreOSR.Tests.Editions
     {
         private readonly IEditionAppService _editionAppService;
         private readonly IRepository<SubscribableEdition> _subcribableEditionRepository;
+        private readonly ILocalizationManager _localizationManager;
 
         public EditionAppService_Tests()
         {
@@ -26,6 +27,7 @@ namespace CoreOSR.Tests.Editions
 
             _editionAppService = Resolve<IEditionAppService>();
             _subcribableEditionRepository = Resolve<IRepository<SubscribableEdition>>();
+            _localizationManager = Resolve<ILocalizationManager>();
         }
 
         [MultiTenantFact]
@@ -143,7 +145,7 @@ namespace CoreOSR.Tests.Editions
             var defaultEdition = UsingDbContext(context => context.Editions.FirstOrDefault(e => e.Name == EditionManager.DefaultEditionName));
 
             var exception = await Assert.ThrowsAsync<UserFriendlyException>(async () => await _editionAppService.DeleteEdition(new EntityDto(defaultEdition.Id)));
-            exception.Message.ShouldContain("There are tenants subscribed to this edition.");
+            exception.Message.ShouldContain(_localizationManager.GetString(CoreOSRConsts.LocalizationSourceName, "ThereAreTenantsSubscribedToThisEdition"));
         }
     }
 }

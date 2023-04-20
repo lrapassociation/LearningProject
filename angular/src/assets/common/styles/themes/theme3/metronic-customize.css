@@ -1,46 +1,45 @@
-.cc-window {
-    background-color: #282a3a;
-}
-
-.cc-btn {
-    background-color: #5867dd;
-    border-color: #5867dd;
-    color: #ffffff;
-}
-
-.cc-message {
-    color: #fefefe;
-}
-
-.kt-header__topbar-username {
-    color: #c7c7de !important;
-}
-
-.kt-menu__link-text {
-    text-align: center;
-}
-
-body .kt-header__topbar .subscription-warning {
-    padding-top: 32px;
-}
-
-body.kt-header--minimize .kt-header__topbar .subscription-warning {
-    padding-top: 18px;
-}
-
-@media (max-width: 1024px) {
-    .kt-header__topbar .kt-header__topbar-item.kt-header__topbar-item--user .kt-header__topbar-wrapper {
-        height: auto;
-    }
-}
-
 .unread-notification-count {
     position: absolute;
-    top: 23px;
-    right: 0px;
-    font-size: 1rem !important;
-    height: 10px !important;
-    width: 10px !important;
-    background-color: #ff0000 !important;
-    padding: 9px;
+    top: 5px;
+    left: 23px;
 }
+
+.unread-chat-message-count {
+    position: absolute;
+    top: -6px;
+    left: 13px;
+}
+
+p-autoComplete {
+    padding: 10px;
+}
+
+.menuSearchBarContainer {
+    width: calc(100% - 20px);
+}
+
+.dropdown-language .dropdown-menu {
+    left: 0px !important;
+}
+
+header-notifications .dropdown-menu {
+    left: 0px !important;
+    min-width: 300px;
+}
+
+#kt_aside_menu side-bar-menu {
+    width: 100% !important;
+}
+
+@media (min-width: 992px) {
+    #kt_content {
+      margin-top: -60px;
+    }
+  }
+
+  @media (min-width: 1400px)
+  {
+    .sidebar-enabled .wrapper {
+        padding-right: 0px !important;
+    }  
+  }

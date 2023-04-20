@@ -20,7 +20,8 @@ namespace CoreOSR.Migrator
             abpZeroTemplateEntityFrameworkCoreModule.SkipDbSeed = true;
 
             _appConfiguration = AppConfigurations.Get(
-                typeof(CoreOSRMigratorModule).GetAssembly().GetDirectoryPathOrNull()
+                typeof(CoreOSRMigratorModule).GetAssembly().GetDirectoryPathOrNull(),
+                addUserSecrets: true
             );
         }
 

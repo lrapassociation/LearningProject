@@ -3,7 +3,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Abp;
 using Abp.Authorization.Users;
-using Abp.AutoMapper;
 using Abp.Dependency;
 using Abp.Domain.Repositories;
 using Abp.Domain.Uow;
@@ -32,7 +31,7 @@ namespace CoreOSR.Gdpr
             IChatMessageListExcelExporter chatMessageListExcelExporter,
             IUnitOfWorkManager unitOfWorkManager,
             IRepository<UserAccount, long> userAccountRepository,
-            IRepository<Tenant> tenantRepository, 
+            IRepository<Tenant> tenantRepository,
             IObjectMapper objectMapper)
         {
             _chatMessageRepository = chatMessageRepository;
@@ -71,7 +70,7 @@ namespace CoreOSR.Gdpr
                 }
 
                 var messages = conversation.Value.OrderBy(m => m.CreationTime).ToList();
-                chatMessageFiles.Add(_chatMessageListExcelExporter.ExportToFile(messages));
+                chatMessageFiles.Add(_chatMessageListExcelExporter.ExportToFile(user, messages));
             }
 
             return chatMessageFiles;
@@ -79,7 +78,7 @@ namespace CoreOSR.Gdpr
 
         private Dictionary<UserIdentifier, string> GetFriendUsernames(List<UserIdentifier> users)
         {
-            var predicate = PredicateBuilder.False<UserAccount>();
+            var predicate = PredicateBuilder.New<UserAccount>();
 
             foreach (var user in users)
             {
@@ -101,15 +100,17 @@ namespace CoreOSR.Gdpr
 
         private async Task<Dictionary<UserIdentifier, List<ChatMessageExportDto>>> GetUserChatMessages(int? tenantId, long userId)
         {
-            var conversations = await (from message in _chatMessageRepository.GetAll()
-                                       where message.UserId == userId && message.TenantId == tenantId
-                                       group message by new { message.TargetTenantId, message.TargetUserId } into messageGrouped
-                                       select new
-                                       {
-                                           TargetTenantId = messageGrouped.Key.TargetTenantId,
-                                           TargetUserId = messageGrouped.Key.TargetUserId,
-                                           Messages = messageGrouped
-                                       }).ToListAsync();
+            var conversations = (await _chatMessageRepository.GetAll()
+                    .Where(message => message.UserId == userId && message.TenantId == tenantId)
+                    .ToListAsync()
+                )
+                .GroupBy(message => new {message.TargetTenantId, message.TargetUserId})
+                .Select(messageGrouped => new
+                {
+                    TargetTenantId = messageGrouped.Key.TargetTenantId,
+                    TargetUserId = messageGrouped.Key.TargetUserId,
+                    Messages = messageGrouped
+                }).ToList();
 
             return conversations.ToDictionary(c => new UserIdentifier(c.TargetTenantId, c.TargetUserId), c => _objectMapper.Map<List<ChatMessageExportDto>>(c.Messages));
         }

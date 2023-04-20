@@ -6,16 +6,12 @@ import { ThemeSettingsDto, UiCustomizationSettingsServiceProxy } from '@shared/s
 @Component({
     templateUrl: './theme7-theme-ui-settings.component.html',
     animations: [appModuleAnimation()],
-    selector: 'theme7-theme-ui-settings'
+    selector: 'theme7-theme-ui-settings',
 })
 export class Theme7ThemeUiSettingsComponent extends AppComponentBase {
-
     @Input() settings: ThemeSettingsDto;
 
-    constructor(
-        injector: Injector,
-        private _uiCustomizationService: UiCustomizationSettingsServiceProxy
-    ) {
+    constructor(injector: Injector, private _uiCustomizationService: UiCustomizationSettingsServiceProxy) {
         super(injector);
     }
 
@@ -26,15 +22,19 @@ export class Theme7ThemeUiSettingsComponent extends AppComponentBase {
     }
 
     updateDefaultUiManagementSettings(): void {
-        this._uiCustomizationService.updateDefaultUiManagementSettings(this.getCustomizedSetting(this.settings)).subscribe(() => {
-            window.location.reload();
-        });
+        this._uiCustomizationService
+            .updateDefaultUiManagementSettings(this.getCustomizedSetting(this.settings))
+            .subscribe(() => {
+                window.location.reload();
+            });
     }
 
     updateUiManagementSettings(): void {
-        this._uiCustomizationService.updateUiManagementSettings(this.getCustomizedSetting(this.settings)).subscribe(() => {
-            window.location.reload();
-        });
+        this._uiCustomizationService
+            .updateUiManagementSettings(this.getCustomizedSetting(this.settings))
+            .subscribe(() => {
+                window.location.reload();
+            });
     }
 
     useSystemDefaultSettings(): void {

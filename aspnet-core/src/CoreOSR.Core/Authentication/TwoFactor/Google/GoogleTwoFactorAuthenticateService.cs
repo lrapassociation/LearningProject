@@ -54,7 +54,7 @@ namespace CoreOSR.Authentication.TwoFactor.Google
 
             var protocol = useHttps ? "https" : "http";
             var url =
-                $"{protocol}://chart.googleapis.com/chart?cht=qr&chs={qrCodeWidth}x{qrCodeHeight}&chl={provisionUrl}";
+                $"{protocol}://chart.googleapis.com/chart?cht=qr&chs={qrCodeWidth}x{qrCodeHeight}&chl={provisionUrl}&chld=L|0";
 
             setupCode.QrCodeSetupImageUrl = url;
 
@@ -185,7 +185,7 @@ namespace CoreOSR.Authentication.TwoFactor.Google
             return ValidateTwoFactorPin(accountSecretKey, twoFactorCodeFromClient, DefaultClockDriftTolerance);
         }
 
-        public bool ValidateTwoFactorPin(string accountSecretKey, string twoFactorCodeFromClient, TimeSpan timeTolerance)
+        private bool ValidateTwoFactorPin(string accountSecretKey, string twoFactorCodeFromClient, TimeSpan timeTolerance)
         {
             var codes = GetCurrentPins(accountSecretKey, timeTolerance);
             return codes.Any(c => c == twoFactorCodeFromClient);

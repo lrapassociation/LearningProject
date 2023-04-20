@@ -3,11 +3,17 @@ import { ActivatedRoute } from '@angular/router';
 import { AppConsts } from '@shared/AppConsts';
 import { appModuleAnimation } from '@shared/animations/routerTransition';
 import { AppComponentBase } from '@shared/common/app-component-base';
-import { EntityDtoOfInt64, UserListDto, UserServiceProxy, PermissionServiceProxy, FlatPermissionDto } from '@shared/service-proxies/service-proxies';
+import {
+    EntityDtoOfInt64,
+    GetRolesInput,
+    GetUsersInput,
+    UserListDto,
+    UserServiceProxy,
+} from '@shared/service-proxies/service-proxies';
 import { FileDownloadService } from '@shared/utils/file-download.service';
-import { LazyLoadEvent } from 'primeng/components/common/lazyloadevent';
-import { Paginator } from 'primeng/components/paginator/paginator';
-import { Table } from 'primeng/components/table/table';
+import { LazyLoadEvent } from 'primeng/api';
+import { Paginator } from 'primeng/paginator';
+import { Table } from 'primeng/table';
 import { CreateOrEditUserModalComponent } from './create-or-edit-user-modal.component';
 import { EditUserPermissionsModalComponent } from './edit-user-permissions-modal.component';
 import { ImpersonationService } from './impersonation.service';
@@ -15,21 +21,26 @@ import { HttpClient } from '@angular/common/http';
 import { FileUpload } from 'primeng/fileupload';
 import { finalize } from 'rxjs/operators';
 import { PermissionTreeModalComponent } from '../shared/permission-tree-modal.component';
+import { LocalStorageService } from '@shared/utils/local-storage.service';
+import { DynamicEntityPropertyManagerComponent } from '@app/shared/common/dynamic-entity-property-manager/dynamic-entity-property-manager.component';
 
 @Component({
     templateUrl: './users.component.html',
     encapsulation: ViewEncapsulation.None,
     styleUrls: ['./users.component.less'],
-    animations: [appModuleAnimation()]
+    animations: [appModuleAnimation()],
 })
 export class UsersComponent extends AppComponentBase implements AfterViewInit {
-
     @ViewChild('createOrEditUserModal', { static: true }) createOrEditUserModal: CreateOrEditUserModalComponent;
-    @ViewChild('editUserPermissionsModal', { static: true }) editUserPermissionsModal: EditUserPermissionsModalComponent;
+    @ViewChild('editUserPermissionsModal', { static: true })
+        editUserPermissionsModal: EditUserPermissionsModalComponent;
     @ViewChild('dataTable', { static: true }) dataTable: Table;
     @ViewChild('paginator', { static: true }) paginator: Paginator;
-    @ViewChild('ExcelFileUpload', { static: true }) excelFileUpload: FileUpload;
+    @ViewChild('ExcelFileUpload', { static: false }) excelFileUpload: FileUpload;
     @ViewChild('permissionFilterTreeModal', { static: true }) permissionFilterTreeModal: PermissionTreeModalComponent;
+    @ViewChild('dynamicEntityPropertyManager', { static: true })
+        dynamicEntityPropertyManager: DynamicEntityPropertyManagerComponent;
+
     uploadUrl: string;
 
     //Filters
@@ -45,6 +56,7 @@ export class UsersComponent extends AppComponentBase implements AfterViewInit {
         private _fileDownloadService: FileDownloadService,
         private _activatedRoute: ActivatedRoute,
         private _httpClient: HttpClient,
+        private _localStorageService: LocalStorageService
     ) {
         super(injector);
         this.filterText = this._activatedRoute.snapshot.queryParams['filterText'] || '';
@@ -59,29 +71,38 @@ export class UsersComponent extends AppComponentBase implements AfterViewInit {
         if (this.primengTableHelper.shouldResetPaging(event)) {
             this.paginator.changePage(0);
 
-            return;
+            if (this.primengTableHelper.records && this.primengTableHelper.records.length > 0) {
+                return;
+            }
         }
 
         this.primengTableHelper.showLoadingIndicator();
 
-        this._userServiceProxy.getUsers(
-            this.filterText,
-            this.permissionFilterTreeModal.getSelectedPermissions(),
-            this.role !== '' ? parseInt(this.role) : undefined,
-            this.onlyLockedUsers,
-            this.primengTableHelper.getSorting(this.dataTable),
-            this.primengTableHelper.getMaxResultCount(this.paginator, event),
-            this.primengTableHelper.getSkipCount(this.paginator, event)
-        ).pipe(finalize(() => this.primengTableHelper.hideLoadingIndicator())).subscribe(result => {
-            this.primengTableHelper.totalRecordsCount = result.totalCount;
-            this.primengTableHelper.records = result.items;
-            this.primengTableHelper.hideLoadingIndicator();
-        });
+        this._userServiceProxy
+            .getUsers(
+                new GetUsersInput({
+                    filter: this.filterText,
+                    permissions: this.permissionFilterTreeModal.getSelectedPermissions(),
+                    role: this.role !== '' ? parseInt(this.role) : undefined,
+                    onlyLockedUsers: this.onlyLockedUsers,
+                    sorting: this.primengTableHelper.getSorting(this.dataTable),
+                    maxResultCount: this.primengTableHelper.getMaxResultCount(this.paginator, event),
+                    skipCount: this.primengTableHelper.getSkipCount(this.paginator, event),
+                })
+            )
+            .pipe(finalize(() => this.primengTableHelper.hideLoadingIndicator()))
+            .subscribe((result) => {
+                this.primengTableHelper.totalRecordsCount = result.totalCount;
+                this.primengTableHelper.records = result.items;
+                this.setUsersProfilePictureUrl(this.primengTableHelper.records);
+                this.primengTableHelper.hideLoadingIndicator();
+            });
     }
 
     unlockUser(record): void {
         this._userServiceProxy.unlockUser(new EntityDtoOfInt64({ id: record.id })).subscribe(() => {
             this.notify.success(this.l('UnlockedTheUser', record.userName));
+            this.reloadPage();
         });
     }
 
@@ -104,13 +125,15 @@ export class UsersComponent extends AppComponentBase implements AfterViewInit {
     }
 
     exportToExcel(): void {
-        this._userServiceProxy.getUsersToExcel(
-            this.filterText,
-            this.permissionFilterTreeModal.getSelectedPermissions(),
-            this.role !== '' ? parseInt(this.role) : undefined,
-            this.onlyLockedUsers,
-            this.primengTableHelper.getSorting(this.dataTable))
-            .subscribe(result => {
+        this._userServiceProxy
+            .getUsersToExcel(
+                this.filterText,
+                this.permissionFilterTreeModal.getSelectedPermissions(),
+                this.role !== '' ? parseInt(this.role) : undefined,
+                this.onlyLockedUsers,
+                this.primengTableHelper.getSorting(this.dataTable)
+            )
+            .subscribe((result) => {
                 this._fileDownloadService.downloadTempFile(result);
             });
     }
@@ -127,7 +150,7 @@ export class UsersComponent extends AppComponentBase implements AfterViewInit {
         this._httpClient
             .post<any>(this.uploadUrl, formData)
             .pipe(finalize(() => this.excelFileUpload.clear()))
-            .subscribe(response => {
+            .subscribe((response) => {
                 if (response.success) {
                     this.notify.success(this.l('ImportUsersProcessStart'));
                 } else if (response.error != null) {
@@ -146,18 +169,36 @@ export class UsersComponent extends AppComponentBase implements AfterViewInit {
             return;
         }
 
-        this.message.confirm(
-            this.l('UserDeleteWarningMessage', user.userName),
-            this.l('AreYouSure'),
-            (isConfirmed) => {
-                if (isConfirmed) {
-                    this._userServiceProxy.deleteUser(user.id)
-                        .subscribe(() => {
-                            this.reloadPage();
-                            this.notify.success(this.l('SuccessfullyDeleted'));
-                        });
-                }
+        this.message.confirm(this.l('UserDeleteWarningMessage', user.userName), this.l('AreYouSure'), (isConfirmed) => {
+            if (isConfirmed) {
+                this._userServiceProxy.deleteUser(user.id).subscribe(() => {
+                    this.reloadPage();
+                    this.notify.success(this.l('SuccessfullyDeleted'));
+                });
             }
-        );
+        });
+    }
+
+    showDynamicProperties(user: UserListDto): void {
+        this.dynamicEntityPropertyManager
+            .getModal()
+            .show('CoreOSR.Authorization.Users.User', user.id.toString());
+    }
+
+    setUsersProfilePictureUrl(users: UserListDto[]): void {
+        for (let i = 0; i < users.length; i++) {
+            let user = users[i];
+            this._localStorageService.getItem(AppConsts.authorization.encrptedAuthTokenName, function (err, value) {
+                let profilePictureUrl =
+                    AppConsts.remoteServiceBaseUrl +
+                    '/Profile/GetProfilePictureByUser?userId=' +
+                    user.id +
+                    '&' +
+                    AppConsts.authorization.encrptedAuthTokenName +
+                    '=' +
+                    encodeURIComponent(value.token);
+                (user as any).profilePictureUrl = profilePictureUrl;
+            });
+        }
     }
 }

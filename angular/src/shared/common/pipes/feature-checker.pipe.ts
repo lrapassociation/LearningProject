@@ -1,11 +1,10 @@
 import { Injector, Pipe, PipeTransform } from '@angular/core';
-import { FeatureCheckerService } from '@abp/features/feature-checker.service';
+import { FeatureCheckerService } from 'abp-ng2-module';
 
 @Pipe({
-    name: 'checkFeature'
+    name: 'checkFeature',
 })
 export class FeatureCheckerPipe implements PipeTransform {
-
     featureCheckerService: FeatureCheckerService;
 
     constructor(injector: Injector) {

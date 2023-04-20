@@ -22,6 +22,12 @@ namespace CoreOSR.MultiTenancy.Dto
         [StringLength(AbpUserBase.MaxEmailAddressLength)]
         public string AdminEmailAddress { get; set; }
 
+        [StringLength(AbpUserBase.MaxNameLength)]
+        public string AdminName { get; set; }
+        
+        [StringLength(AbpUserBase.MaxSurnameLength)]
+        public string AdminSurname { get; set; }
+        
         [StringLength(AbpUserBase.MaxPlainPasswordLength)]
         [DisableAuditing]
         public string AdminPassword { get; set; }

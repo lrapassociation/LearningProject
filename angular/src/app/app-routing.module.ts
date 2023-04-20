@@ -1,8 +1,9 @@
 import { NgModule } from '@angular/core';
-import { NavigationEnd, RouteConfigLoadEnd, RouteConfigLoadStart, Router, RouterModule } from '@angular/router';
+import { NavigationEnd, NavigationStart, RouteConfigLoadEnd, RouteConfigLoadStart, Router, RouterModule } from '@angular/router';
 import { AppComponent } from './app.component';
 import { AppRouteGuard } from './shared/common/auth/auth-route-guard';
 import { NotificationsComponent } from './shared/layout/notifications/notifications.component';
+import { NgxSpinnerService } from 'ngx-spinner';
 
 @NgModule({
     imports: [
@@ -17,45 +18,40 @@ import { NotificationsComponent } from './shared/layout/notifications/notificati
                         path: '',
                         children: [
                             { path: 'notifications', component: NotificationsComponent },
-                            { path: '', redirectTo: '/dashboard', pathMatch: 'full' }
-                        ]
+                            { path: '', redirectTo: '/app/main/dashboard', pathMatch: 'full' },
+                        ],
                     },
                     {
                         path: 'main',
-                        loadChildren: () => import('app/main/main.module').then(m => m.MainModule), //Lazy load main module
-                        data: { preload: true }
+                        loadChildren: () => import('app/main/main.module').then((m) => m.MainModule), //Lazy load main module
+                        data: { preload: true },
                     },
                     {
                         path: 'admin',
-                        loadChildren: () => import('app/admin/admin.module').then(m => m.AdminModule), //Lazy load admin module
+                        loadChildren: () => import('app/admin/admin.module').then((m) => m.AdminModule), //Lazy load admin module
                         data: { preload: true },
-                        canLoad: [AppRouteGuard]
-                    }, {
-                        path: '**', redirectTo: 'notifications'
-                    }
-                ]
-            }
-        ])
+                        canLoad: [AppRouteGuard],
+                    },
+                    {
+                        path: '**',
+                        redirectTo: 'notifications',
+                    },
+                ],
+            },
+        ]),
     ],
-    exports: [RouterModule]
+    exports: [RouterModule],
 })
-
 export class AppRoutingModule {
-    constructor(
-        private router: Router
-    ) {
+    constructor(private router: Router, private spinnerService: NgxSpinnerService) {
         router.events.subscribe((event) => {
-
-            if (event instanceof RouteConfigLoadStart) {
-                abp.ui.setBusy();
-            }
-
-            if (event instanceof RouteConfigLoadEnd) {
-                abp.ui.clearBusy();
+            if (event instanceof NavigationStart) {
+                spinnerService.show();
             }
 
             if (event instanceof NavigationEnd) {
                 document.querySelector('meta[property=og\\:url').setAttribute('content', window.location.href);
+                spinnerService.hide();
             }
         });
     }

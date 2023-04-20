@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Abp.Runtime.Validation;
+using CoreOSR.Common;
 using CoreOSR.Dto;
 
 namespace CoreOSR.Organizations.Dto
@@ -15,14 +16,21 @@ namespace CoreOSR.Organizations.Dto
             {
                 Sorting = "user.Name, user.Surname";
             }
-            else if (Sorting.Contains("userName"))
+
+            Sorting = DtoSortingHelper.ReplaceSorting(Sorting, s =>
             {
-                Sorting = Sorting.Replace("userName", "user.userName");
-            }
-            else if (Sorting.Contains("addedTime"))
-            {
-                Sorting = Sorting.Replace("addedTime", "uou.creationTime");
-            }
+                if (s.Contains("userName"))
+                {
+                    s = s.Replace("userName", "user.userName");
+                }
+
+                if (s.Contains("addedTime"))
+                {
+                    s = s.Replace("addedTime", "ouUser.creationTime");
+                }
+
+                return s;
+            });
         }
     }
 }

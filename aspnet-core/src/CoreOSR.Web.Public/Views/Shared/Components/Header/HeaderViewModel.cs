@@ -1,8 +1,10 @@
 ﻿using System.Collections.Generic;
+using System.Threading.Tasks;
 using Abp.Application.Navigation;
 using Abp.Extensions;
 using Abp.Localization;
 using CoreOSR.Sessions.Dto;
+using CoreOSR.UiCustomization.Dto;
 
 namespace CoreOSR.Web.Public.Views.Shared.Components.Header
 {
@@ -28,6 +30,8 @@ namespace CoreOSR.Web.Public.Views.Shared.Components.Header
 
         public string WebSiteRootAddress { get; set; }
 
+        public string LogoSkin { get; set; }
+        
         public string GetShownLoginName()
         {
             if (!IsMultiTenancyEnabled)
@@ -40,14 +44,14 @@ namespace CoreOSR.Web.Public.Views.Shared.Components.Header
                 : LoginInformations.Tenant.TenancyName + "\\" + LoginInformations.User.UserName;
         }
 
-        public string GetLogoUrl(string appPath)
+        public string GetLogoUrl(string appPath, string logoSkin)
         {
-            if (!IsMultiTenancyEnabled || LoginInformations?.Tenant?.LogoId == null)
+            if (!IsMultiTenancyEnabled || LoginInformations?.Tenant == null || !LoginInformations.Tenant.HasLogo())
             {
-                return appPath + "Common/Images/app-logo-on-light.svg";
+                return appPath + "Common/Images/app-logo-on-" + logoSkin + ".svg";
             }
 
-            return AdminWebSiteRootAddress.EnsureEndsWith('/') + "TenantCustomization/GetLogo?tenantId=" + LoginInformations?.Tenant?.Id;
+            return AdminWebSiteRootAddress.EnsureEndsWith('/') + "TenantCustomization/GetTenantLogo?tenantId=" + LoginInformations?.Tenant?.Id + "&skin=" + logoSkin;
         }
     }
 }

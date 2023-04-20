@@ -1,42 +1,60 @@
-.cc-window {
-    background-color: #282a3a;
-}
+body:not(.account) {
+    background-size: 100% 350px;
+  }
 
-.cc-btn {
-    background-color: #5867dd;
-    border-color: #5867dd;
-    color: #ffffff;
-}
-
-.cc-message {
-    color: #fefefe;
-}
-
-.kt-header__topbar .kt-header__topbar-item.kt-header__topbar-item--langs {
-    margin-right: 0;
-}
-
-.kt-header__topbar .subscription-warning {
-    padding-top: 13px;
-}
-
-.kt-header__topbar-item--user .dropdown-menu.show {
-    top: 50% !important;
-}
-
-@media (max-width: 1024px) {
-    #kt_header {
-        margin-top: -40px;
-    }
-}
-
-.unread-notification-count {
+  body.dark-mode:not(.account) {
+    background-image: url(/assets/metronic/themes/theme2/images/bg/header-bg-dark.png);
+  }
+  
+  theme2-brand {
+    display: flex;
+    flex: 1;
+  }
+  
+  theme2-layout {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+  }
+  
+  #kt_wrapper > ng-component {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+  }
+  
+  .unread-notification-count {
     position: absolute;
-    top: 1px;
-    right: 0px;
-    font-size: 1rem !important;
-    height: 10px !important;
-    width: 10px !important;
-    background-color: #ff0000 !important;
-    padding: 9px;
-}
+    top: 5px;
+    left: 23px;
+  }
+  
+  .unread-chat-message-count {
+    position: absolute;
+    top: -6px;
+    left: 13px;
+  }
+  
+  .mobile-subscription-warning *{
+    color: #fff;
+  }menu-search-bar {
+    min-width: 100px !important;
+  }
+  
+  p-autoComplete{
+    padding: 10px;
+  }
+  
+  .menuSearchBarContainer{
+    width: calc(100% - 20px);
+  }
+  
+  @media (min-width: 992px){
+    body:not([data-kt-sticky-header=on]) .header .header-menu .menu > .menu-item > .menu-link .menu-icon, body:not([data-kt-sticky-header=on]) .header .header-menu .menu > .menu-item > .menu-link .menu-icon .svg-icon, body:not([data-kt-sticky-header=on]) .header .header-menu .menu > .menu-item > .menu-link .menu-icon i{
+      color: #fff !important;
+    }
+  }
+  
+  .drawer-overlay{
+    z-index: 1 !important;
+  }

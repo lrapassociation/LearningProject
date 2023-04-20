@@ -2,6 +2,7 @@
 {
     public class PasswordComplexitySetting
     {
+        public int AllowedMinimumLength { get; private set; } = 3;
         public bool Equals(PasswordComplexitySetting other)
         {
             if (other == null)

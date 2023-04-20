@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
+using Abp.Authorization.Roles;
 using Abp.Authorization.Users;
+using CoreOSR.Authorization.Roles;
 using CoreOSR.Authorization.Users.Dto;
 using Shouldly;
 using Xunit;
@@ -48,6 +50,7 @@ namespace CoreOSR.Tests.Authorization.Users
         {
             //Arrange
             CreateTestUsers();
+            var roleStore = Resolve<RoleStore>();
 
             //Act
             var output = await UserAppService.GetUsers(

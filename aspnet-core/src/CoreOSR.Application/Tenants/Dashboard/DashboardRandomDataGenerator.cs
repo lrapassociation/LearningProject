@@ -112,17 +112,17 @@ namespace CoreOSR.Tenants.Dashboard
         {
             return new List<MemberActivity>
             {
-                new MemberActivity("Brain", "$" + GetRandomInt(100, 500), GetRandomInt(10, 100), GetRandomInt(10, 150),
-                    GetRandomInt(10, 99) + "%"),
+                new MemberActivity("Brain", CoreOSRConsts.CurrencySign + GetRandomInt(100, 500), GetRandomInt(10, 100), GetRandomInt(10, 150),
+                    GetRandomInt(10, 99) + "%", "015-boy-6.svg"),
 
-                new MemberActivity("Jane", "$" + GetRandomInt(100, 500), GetRandomInt(10, 100), GetRandomInt(10, 150),
-                    GetRandomInt(10, 99) + "%"),
+                new MemberActivity("Jane", CoreOSRConsts.CurrencySign + GetRandomInt(100, 500), GetRandomInt(10, 100), GetRandomInt(10, 150),
+                    GetRandomInt(10, 99) + "%","017-girl-8.svg"),
 
-                new MemberActivity("Tim", "$" + GetRandomInt(100, 500), GetRandomInt(10, 100), GetRandomInt(10, 150),
-                    GetRandomInt(10, 99) + "%"),
+                new MemberActivity("Tim", CoreOSRConsts.CurrencySign + GetRandomInt(100, 500), GetRandomInt(10, 100), GetRandomInt(10, 150),
+                    GetRandomInt(10, 99) + "%", "004-boy-1.svg"),
 
-                new MemberActivity("Kate", "$" + GetRandomInt(100, 500), GetRandomInt(10, 100), GetRandomInt(10, 150),
-                    GetRandomInt(10, 99) + "%")
+                new MemberActivity("Kate", CoreOSRConsts.CurrencySign + GetRandomInt(100, 500), GetRandomInt(10, 100), GetRandomInt(10, 150),
+                    GetRandomInt(10, 99) + "%", "039-girl-21.svg")
             };
         }
 

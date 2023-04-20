@@ -2,7 +2,7 @@
 
 namespace CoreOSR.Views
 {
-    public partial class MainView : MasterDetailPage, IXamarinView
+    public partial class MainView : FlyoutPage, IXamarinView
     {
         public MainView()
         {

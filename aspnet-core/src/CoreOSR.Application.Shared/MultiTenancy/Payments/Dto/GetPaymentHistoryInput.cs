@@ -1,4 +1,5 @@
-﻿using Abp.Runtime.Validation;
+using Abp.Runtime.Validation;
+using CoreOSR.Common;
 using CoreOSR.Dto;
 
 namespace CoreOSR.MultiTenancy.Payments.Dto
@@ -12,7 +13,10 @@ namespace CoreOSR.MultiTenancy.Payments.Dto
                 Sorting = "CreationTime";
             }
 
-            Sorting = Sorting.Replace("editionDisplayName", "Edition.DisplayName");
+            Sorting = DtoSortingHelper.ReplaceSorting(Sorting, s =>
+            {
+                return s.Replace("editionDisplayName", "Edition.DisplayName");
+            });
         }
     }
 }

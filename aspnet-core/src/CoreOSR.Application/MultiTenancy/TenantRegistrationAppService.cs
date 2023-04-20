@@ -93,7 +93,7 @@ namespace CoreOSR.MultiTenancy
 
                     if (isInTrialPeriod)
                     {
-                        var edition = (SubscribableEdition)await _editionManager.GetByIdAsync(input.EditionId.Value);
+                        var edition = (SubscribableEdition) await _editionManager.GetByIdAsync(input.EditionId.Value);
                         subscriptionEndDate = Clock.Now.AddDays(edition.TrialDayCount ?? 0);
                     }
                 }
@@ -110,7 +110,9 @@ namespace CoreOSR.MultiTenancy
                     sendActivationEmail: true,
                     subscriptionEndDate,
                     isInTrialPeriod,
-                    AppUrlService.CreateEmailActivationUrlFormat(input.TenancyName)
+                    AppUrlService.CreateEmailActivationUrlFormat(input.TenancyName),
+                    adminName: input.AdminName,
+                    adminSurname: input.AdminSurname
                 );
 
                 var tenant = await TenantManager.GetByIdAsync(tenantId);
@@ -137,7 +139,8 @@ namespace CoreOSR.MultiTenancy
                 return false;
             }
 
-            return await SettingManager.GetSettingValueForApplicationAsync<bool>(AppSettings.TenantManagement.IsNewRegisteredTenantActiveByDefault);
+            return await SettingManager.GetSettingValueForApplicationAsync<bool>(AppSettings.TenantManagement
+                .IsNewRegisteredTenantActiveByDefault);
         }
 
         private async Task CheckRegistrationWithoutEdition()
@@ -145,7 +148,8 @@ namespace CoreOSR.MultiTenancy
             var editions = await _editionManager.GetAllAsync();
             if (editions.Any())
             {
-                throw new Exception("Tenant registration is not allowed without edition because there are editions defined !");
+                throw new Exception(
+                    "Tenant registration is not allowed without edition because there are editions defined !");
             }
         }
 
@@ -153,7 +157,8 @@ namespace CoreOSR.MultiTenancy
         {
             var features = FeatureManager
                 .GetAll()
-                .Where(feature => (feature[FeatureMetadata.CustomFeatureKey] as FeatureMetadata)?.IsVisibleOnPricingTable ?? false);
+                .Where(feature =>
+                    (feature[FeatureMetadata.CustomFeatureKey] as FeatureMetadata)?.IsVisibleOnPricingTable ?? false);
 
             var flatFeatures = ObjectMapper
                 .Map<List<FlatFeatureSelectDto>>(features)
@@ -176,24 +181,30 @@ namespace CoreOSR.MultiTenancy
             if (AbpSession.UserId.HasValue)
             {
                 var currentEditionId = (await _tenantManager.GetByIdAsync(AbpSession.GetTenantId()))
-                        .EditionId;
+                    .EditionId;
 
                 if (currentEditionId.HasValue)
                 {
-                    var currentEdition = (SubscribableEdition)(await _editionManager.GetByIdAsync(currentEditionId.Value));
-                    var lastPayment = await _subscriptionPaymentRepository.GetLastCompletedPaymentOrDefaultAsync(
-                        AbpSession.GetTenantId(),
-                        null,
-                        null);
+                    editionWithFeatures = editionWithFeatures.Where(e => e.Edition.Id != currentEditionId).ToList();
 
-                    if (lastPayment != null)
+                    var currentEdition =
+                        (SubscribableEdition) (await _editionManager.GetByIdAsync(currentEditionId.Value));
+                    if (!currentEdition.IsFree)
                     {
-                        editionWithFeatures = editionWithFeatures
-                            .Where(e =>
-                                e.Edition.GetPaymentAmount(lastPayment.PaymentPeriodType) >
-                                currentEdition.GetPaymentAmount(lastPayment.PaymentPeriodType)
-                            )
-                            .ToList();
+                        var lastPayment = await _subscriptionPaymentRepository.GetLastCompletedPaymentOrDefaultAsync(
+                            AbpSession.GetTenantId(),
+                            null,
+                            null);
+
+                        if (lastPayment != null)
+                        {
+                            editionWithFeatures = editionWithFeatures
+                                .Where(e =>
+                                    e.Edition.GetPaymentAmount(lastPayment.PaymentPeriodType) >
+                                    currentEdition.GetPaymentAmount(lastPayment.PaymentPeriodType)
+                                )
+                                .ToList();
+                        }
                     }
                 }
             }
@@ -213,7 +224,8 @@ namespace CoreOSR.MultiTenancy
             return editionDto;
         }
 
-        private async Task<EditionWithFeaturesDto> CreateEditionWithFeaturesDto(SubscribableEdition edition, Dictionary<string, Feature> featureDictionary)
+        private async Task<EditionWithFeaturesDto> CreateEditionWithFeaturesDto(SubscribableEdition edition,
+            Dictionary<string, Feature> featureDictionary)
         {
             return new EditionWithFeaturesDto
             {
@@ -243,17 +255,14 @@ namespace CoreOSR.MultiTenancy
 
         private bool IsSelfRegistrationEnabled()
         {
-            return SettingManager.GetSettingValueForApplication<bool>(AppSettings.TenantManagement.AllowSelfRegistration);
+            return SettingManager.GetSettingValueForApplication<bool>(
+                AppSettings.TenantManagement.AllowSelfRegistration);
         }
 
         private bool UseCaptchaOnRegistration()
         {
-            if (DebugHelper.IsDebug)
-            {
-                return false;
-            }
-
-            return SettingManager.GetSettingValueForApplication<bool>(AppSettings.TenantManagement.UseCaptchaOnRegistration);
+            return SettingManager.GetSettingValueForApplication<bool>(AppSettings.TenantManagement
+                .UseCaptchaOnRegistration);
         }
 
         private async Task CheckEditionSubscriptionAsync(int editionId, SubscriptionStartType subscriptionStartType)
@@ -263,7 +272,8 @@ namespace CoreOSR.MultiTenancy
             CheckSubscriptionStart(edition, subscriptionStartType);
         }
 
-        private static void CheckSubscriptionStart(SubscribableEdition edition, SubscriptionStartType subscriptionStartType)
+        private static void CheckSubscriptionStart(SubscribableEdition edition,
+            SubscriptionStartType subscriptionStartType)
         {
             switch (subscriptionStartType)
             {
@@ -272,18 +282,21 @@ namespace CoreOSR.MultiTenancy
                     {
                         throw new Exception("This is not a free edition !");
                     }
+
                     break;
                 case SubscriptionStartType.Trial:
                     if (!edition.HasTrial())
                     {
                         throw new Exception("Trial is not available for this edition !");
                     }
+
                     break;
                 case SubscriptionStartType.Paid:
                     if (edition.IsFree)
                     {
                         throw new Exception("This is a free edition and cannot be subscribed as paid !");
                     }
+
                     break;
             }
         }

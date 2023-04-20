@@ -15,6 +15,10 @@ namespace CoreOSR.Sessions.Dto
 
         public bool AllowTenantsToChangeEmailSettings { get; set; }
 
+        public bool UserDelegationIsEnabled { get; set; }
+        
+        public double TwoFactorCodeExpireSeconds { get; set; }
+
         public Dictionary<string, bool> Features { get; set; }
     }
 }

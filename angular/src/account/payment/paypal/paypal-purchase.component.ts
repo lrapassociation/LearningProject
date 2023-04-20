@@ -12,16 +12,15 @@ import {
     PaymentServiceProxy,
     PayPalConfigurationDto,
     SubscriptionPaymentGatewayType,
-    EditionPaymentType
+    EditionPaymentType,
 } from '@shared/service-proxies/service-proxies';
 
 @Component({
     selector: 'paypal-purchase-component',
     templateUrl: './paypal-purchase.component.html',
-    animations: [accountModuleAnimation()]
+    animations: [accountModuleAnimation()],
 })
 export class PayPalPurchaseComponent extends AppComponentBase implements OnInit {
-
     @Input() editionPaymentType: EditionPaymentType;
 
     config: PayPalConfigurationDto;
@@ -48,37 +47,38 @@ export class PayPalPurchaseComponent extends AppComponentBase implements OnInit 
     }
 
     ngOnInit(): void {
+
+        this.setTenantIdCookieIfNeeded();
+
         this.paymentId = this._activatedRoute.snapshot.queryParams['paymentId'];
-        this.redirectUrl = this._activatedRoute.snapshot.queryParams[
-            'redirectUrl'
-        ];
+        this.redirectUrl = this._activatedRoute.snapshot.queryParams['redirectUrl'];
 
-        this._payPalPaymentAppService
-            .getConfiguration()
-            .subscribe((config: PayPalConfigurationDto) => {
-                this.config = config;
+        this._payPalPaymentAppService.getConfiguration().subscribe((config: PayPalConfigurationDto) => {
+            this.config = config;
 
-                new ScriptLoaderService()
-                    .load(
-                        'https://www.paypal.com/sdk/js?client-id=' +
-                        config.clientId
-                    )
-                    .then(() => {
-                        this._paymentAppService
-                            .getPayment(this.paymentId)
-                            .subscribe((result: SubscriptionPaymentDto) => {
-                                this.description = result.description;
-                                this.totalAmount = result.amount;
-                                this.successCallbackUrl = result.successUrl;
-                                this.errorCallbackUrl = result.errorUrl;
+            let disabledFundings = this.GetDisabledFundingsQueryString(config);
+            new ScriptLoaderService()
+                .load(
+                    'https://www.paypal.com/sdk/js?client-id=' +
+                        config.clientId +
+                        '&currency=' +
+                        this.appSession.application.currency +
+                        disabledFundings
+                )
+                .then(() => {
+                    this._paymentAppService.getPayment(this.paymentId).subscribe((result: SubscriptionPaymentDto) => {
+                        this.description = result.description;
+                        this.totalAmount = result.amount;
+                        this.successCallbackUrl = result.successUrl;
+                        this.errorCallbackUrl = result.errorUrl;
 
-                                this.subscriptionPaymentGateway = result.gateway as any;
+                        this.subscriptionPaymentGateway = result.gateway as any;
 
-                                this.paypalIsLoading = false;
-                                this.preparePaypalButton();
-                            });
+                        this.paypalIsLoading = false;
+                        this.preparePaypalButton();
                     });
-            });
+                });
+        });
     }
 
     preparePaypalButton(): void {
@@ -91,32 +91,49 @@ export class PayPalPurchaseComponent extends AppComponentBase implements OnInit 
                             {
                                 amount: {
                                     value: self.totalAmount,
-                                    currency_code: self.appSession.application.currency
-                                }
-                            }
-                        ]
+                                    currency_code: self.appSession.application.currency,
+                                },
+                            },
+                        ],
                     });
                 },
                 onApprove: function (data, actions) {
-                    self._payPalPaymentAppService
-                        .confirmPayment(self.paymentId, data.orderID)
-                        .subscribe(() => {
-                            XmlHttpRequestHelper.ajax(
-                                'post',
-                                self.successCallbackUrl + (self.successCallbackUrl.includes('?') ? '&' : '?') + 'paymentId=' +
+                    self._payPalPaymentAppService.confirmPayment(self.paymentId, data.orderID).subscribe(() => {
+                        XmlHttpRequestHelper.ajax(
+                            'post',
+                            self.successCallbackUrl +
+                                (self.successCallbackUrl.includes('?') ? '&' : '?') +
+                                'paymentId=' +
                                 self.paymentId,
-                                null,
-                                null,
-                                result => {
-                                    if (self._tenantRegistrationHelper.registrationResult) {
-                                        self._tenantRegistrationHelper.registrationResult.isActive = true;
-                                    }
-                                    self._router.navigate([self.redirectUrl]);
+                            null,
+                            null,
+                            (result) => {
+                                if (self._tenantRegistrationHelper.registrationResult) {
+                                    self._tenantRegistrationHelper.registrationResult.isActive = true;
                                 }
-                            );
-                        });
-                }
+                                self._router.navigate([self.redirectUrl]);
+                            }
+                        );
+                    });
+                },
             })
             .render('#paypal-button');
+    }
+
+    GetDisabledFundingsQueryString(config: PayPalConfigurationDto): string {
+        if (!config.disabledFundings || config.disabledFundings.length <= 0) {
+            return '';
+        }
+
+        return '&disable-funding=' + config.disabledFundings.join();
+    }
+
+    setTenantIdCookieIfNeeded(): void{
+        if (!this._activatedRoute.snapshot.queryParams['tenantId']) {
+            return;
+        }
+
+        let tenantId = parseInt(this._activatedRoute.snapshot.queryParams['tenantId']);
+        abp.multiTenancy.setTenantIdCookie(tenantId);
     }
 }

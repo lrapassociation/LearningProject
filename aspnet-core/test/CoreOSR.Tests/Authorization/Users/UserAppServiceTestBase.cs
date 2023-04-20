@@ -8,10 +8,12 @@ namespace CoreOSR.Tests.Authorization.Users
     public abstract class UserAppServiceTestBase : AppTestBase
     {
         protected readonly IUserAppService UserAppService;
-
+        protected readonly UserManager UserManager;
+        
         protected UserAppServiceTestBase()
         {
             UserAppService = Resolve<IUserAppService>();
+            UserManager = Resolve<UserManager>();
         }
 
         protected void CreateTestUsers()

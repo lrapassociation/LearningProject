@@ -1,19 +1,25 @@
 import { Component, Injector, ViewChild, OnInit } from '@angular/core';
 import { appModuleAnimation } from '@shared/animations/routerTransition';
 import { AppComponentBase } from '@shared/common/app-component-base';
-import { RoleListDto, RoleServiceProxy, PermissionServiceProxy, FlatPermissionDto } from '@shared/service-proxies/service-proxies';
-import { Table } from 'primeng/components/table/table';
+import {
+    RoleListDto,
+    RoleServiceProxy,
+    PermissionServiceProxy,
+    FlatPermissionDto,
+    GetRolesInput,
+} from '@shared/service-proxies/service-proxies';
+import { Table } from 'primeng/table';
 import { CreateOrEditRoleModalComponent } from './create-or-edit-role-modal.component';
 import { EntityTypeHistoryModalComponent } from '@app/shared/common/entityHistory/entity-type-history-modal.component';
-import * as _ from 'lodash';
+import { filter as _filter } from 'lodash-es';
 import { finalize } from 'rxjs/operators';
 import { PermissionTreeModalComponent } from '../shared/permission-tree-modal.component';
+
 @Component({
     templateUrl: './roles.component.html',
-    animations: [appModuleAnimation()]
+    animations: [appModuleAnimation()],
 })
 export class RolesComponent extends AppComponentBase implements OnInit {
-
     @ViewChild('createOrEditRoleModal', { static: true }) createOrEditRoleModal: CreateOrEditRoleModalComponent;
     @ViewChild('entityTypeHistoryModal', { static: true }) entityTypeHistoryModal: EntityTypeHistoryModalComponent;
     @ViewChild('dataTable', { static: true }) dataTable: Table;
@@ -22,10 +28,7 @@ export class RolesComponent extends AppComponentBase implements OnInit {
     _entityTypeFullName = 'CoreOSR.Authorization.Roles.Role';
     entityHistoryEnabled = false;
 
-    constructor(
-        injector: Injector,
-        private _roleService: RoleServiceProxy
-    ) {
+    constructor(injector: Injector, private _roleService: RoleServiceProxy) {
         super(injector);
     }
 
@@ -33,18 +36,14 @@ export class RolesComponent extends AppComponentBase implements OnInit {
         this.setIsEntityHistoryEnabled();
     }
 
-    private setIsEntityHistoryEnabled(): void {
-        let customSettings = (abp as any).custom;
-        this.entityHistoryEnabled = customSettings.EntityHistory && customSettings.EntityHistory.isEnabled && _.filter(customSettings.EntityHistory.enabledEntities, entityType => entityType === this._entityTypeFullName).length === 1;
-    }
-
     getRoles(): void {
         this.primengTableHelper.showLoadingIndicator();
         let selectedPermissions = this.permissionFilterTreeModal.getSelectedPermissions();
 
-        this._roleService.getRoles(selectedPermissions)
+        this._roleService
+            .getRoles(new GetRolesInput({ permissions: selectedPermissions }))
             .pipe(finalize(() => this.primengTableHelper.hideLoadingIndicator()))
-            .subscribe(result => {
+            .subscribe((result) => {
                 this.primengTableHelper.records = result.items;
                 this.primengTableHelper.totalRecordsCount = result.items.length;
                 this.primengTableHelper.hideLoadingIndicator();
@@ -59,7 +58,7 @@ export class RolesComponent extends AppComponentBase implements OnInit {
         this.entityTypeHistoryModal.show({
             entityId: role.id.toString(),
             entityTypeFullName: this._entityTypeFullName,
-            entityTypeDescription: role.displayName
+            entityTypeDescription: role.displayName,
         });
     }
 
@@ -68,7 +67,7 @@ export class RolesComponent extends AppComponentBase implements OnInit {
         self.message.confirm(
             self.l('RoleDeleteWarningMessage', role.displayName),
             this.l('AreYouSure'),
-            isConfirmed => {
+            (isConfirmed) => {
                 if (isConfirmed) {
                     this._roleService.deleteRole(role.id).subscribe(() => {
                         this.getRoles();
@@ -77,5 +76,16 @@ export class RolesComponent extends AppComponentBase implements OnInit {
                 }
             }
         );
+    }
+
+    private setIsEntityHistoryEnabled(): void {
+        let customSettings = (abp as any).custom;
+        this.entityHistoryEnabled =
+            customSettings.EntityHistory &&
+            customSettings.EntityHistory.isEnabled &&
+            _filter(
+                customSettings.EntityHistory.enabledEntities,
+                (entityType) => entityType === this._entityTypeFullName
+            ).length === 1;
     }
 }

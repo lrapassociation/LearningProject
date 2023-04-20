@@ -7,6 +7,8 @@ namespace CoreOSR.Types
     {
         public OrganizationUnitType()
         {
+            Name = "OrganizationUnitType";
+            
             Field(x => x.Id);
             Field(x => x.Code);
             Field(x => x.DisplayName);

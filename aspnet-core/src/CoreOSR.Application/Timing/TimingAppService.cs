@@ -43,9 +43,10 @@ namespace CoreOSR.Timing
         private async Task<List<NameValueDto>> GetTimezoneInfos(SettingScopes defaultTimezoneScope)
         {
             var defaultTimezoneId = await _timeZoneService.GetDefaultTimezoneAsync(defaultTimezoneScope, AbpSession.TenantId);
-            var defaultTimezoneName = $"{L("Default")} [{defaultTimezoneId}]";
 
             var timeZones = _timeZoneService.GetWindowsTimezones();
+
+            var defaultTimezoneName = $"{L("Default")} [{timeZones.FirstOrDefault(x => x.Value == defaultTimezoneId)?.Name ?? defaultTimezoneId}]";
 
             timeZones.Insert(0, new NameValueDto(defaultTimezoneName, string.Empty));
             return timeZones;

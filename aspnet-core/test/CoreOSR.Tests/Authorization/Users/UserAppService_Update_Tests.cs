@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using Abp.Authorization.Users;
 using Abp.UI;
+using JetBrains.Annotations;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using CoreOSR.Authorization.Roles;
@@ -56,7 +57,7 @@ namespace CoreOSR.Tests.Authorization.Users
                     .ShouldBe(PasswordVerificationResult.Success);
 
                 //Check roles
-                updatedAdminUser.Roles.Count.ShouldBe(1);
+                updatedAdminUser.Roles.Count.ShouldBe(2); // Admin role is always assigned to admin user
                 updatedAdminUser.Roles.Any(ur => ur.RoleId == managerRole.Id).ShouldBe(true);
             });
         }
@@ -136,7 +137,7 @@ namespace CoreOSR.Tests.Authorization.Users
                         UserName = adminUser.UserName,
                         Password = null
                     },
-                    AssignedRoleNames = new[]{ StaticRoleNames.Host.Admin } //Just deleting all roles expect admin
+                    AssignedRoleNames = new[]{ StaticRoleNames.Host.Admin } // Just deleting all roles expect admin
                 });
 
             //Assert
@@ -147,6 +148,45 @@ namespace CoreOSR.Tests.Authorization.Users
             });
         }
 
+        [MultiTenantFact]
+        public async Task Should_Not_Remove_From_Admin_Role()
+        {
+            LoginAsHostAdmin();
+
+            // Arrange
+            var adminUser = await GetUserByUserNameOrNullAsync(AbpUserBase.AdminUserName);
+            CreateRole("super_admin");
+            
+            await UsingDbContextAsync(async context =>
+            {
+                var roleCount = await context.UserRoles.CountAsync(ur => ur.UserId == adminUser.Id);
+                roleCount.ShouldBe(1);
+            });
+            
+            //Act
+            await UserAppService.CreateOrUpdateUser(
+                new CreateOrUpdateUserInput
+                {
+                    User = new UserEditDto //Not changing user properties
+                    {
+                        Id = adminUser.Id,
+                        EmailAddress = adminUser.EmailAddress,
+                        Name = adminUser.Name,
+                        Surname = adminUser.Surname,
+                        UserName = adminUser.UserName,
+                        Password = null
+                    },
+                    AssignedRoleNames = new[]{ "super_admin" } // remove admin role and assign super_admin role
+                });
+            
+            // Assert
+            var hasSuperAdminRole = await UserManager.IsInRoleAsync(adminUser, "super_admin");
+            var hasAdminRole = await UserManager.IsInRoleAsync(adminUser, StaticRoleNames.Host.Admin);
+            
+            hasSuperAdminRole.ShouldBe(true);
+            hasAdminRole.ShouldBe(true);
+        }
+        
         protected Role CreateRole(string roleName)
         {
             return UsingDbContext(context => context.Roles.Add(new Role(AbpSession.TenantId, roleName, roleName)).Entity);

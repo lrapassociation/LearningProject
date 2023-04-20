@@ -2,24 +2,28 @@ import { Component, ElementRef, Injector, ViewChild, ViewEncapsulation } from '@
 import { Router } from '@angular/router';
 import { appModuleAnimation } from '@shared/animations/routerTransition';
 import { AppComponentBase } from '@shared/common/app-component-base';
-import { ApplicationLanguageListDto, LanguageServiceProxy, SetDefaultLanguageInput } from '@shared/service-proxies/service-proxies';
-import { Paginator } from 'primeng/components/paginator/paginator';
-import { Table } from 'primeng/components/table/table';
+import {
+    ApplicationLanguageListDto,
+    LanguageServiceProxy,
+    SetDefaultLanguageInput,
+} from '@shared/service-proxies/service-proxies';
+import { Paginator } from 'primeng/paginator';
+import { Table } from 'primeng/table';
 import { CreateOrEditLanguageModalComponent } from './create-or-edit-language-modal.component';
-import { AbpSessionService } from '@abp/session/abp-session.service';
+import { AbpSessionService } from 'abp-ng2-module';
 import { finalize } from 'rxjs/operators';
 
 @Component({
     templateUrl: './languages.component.html',
     encapsulation: ViewEncapsulation.None,
-    animations: [appModuleAnimation()]
+    animations: [appModuleAnimation()],
 })
 export class LanguagesComponent extends AppComponentBase {
-
-    @ViewChild('languagesTable', {static: true}) languagesTable: ElementRef;
-    @ViewChild('createOrEditLanguageModal', {static: true}) createOrEditLanguageModal: CreateOrEditLanguageModalComponent;
-    @ViewChild('dataTable', {static: true}) dataTable: Table;
-    @ViewChild('paginator', {static: true}) paginator: Paginator;
+    @ViewChild('languagesTable', { static: true }) languagesTable: ElementRef;
+    @ViewChild('createOrEditLanguageModal', { static: true })
+        createOrEditLanguageModal: CreateOrEditLanguageModalComponent;
+    @ViewChild('dataTable', { static: true }) dataTable: Table;
+    @ViewChild('paginator', { static: true }) paginator: Paginator;
 
     defaultLanguageName: string;
 
@@ -32,17 +36,22 @@ export class LanguagesComponent extends AppComponentBase {
         super(injector);
     }
 
+    get multiTenancySideIsHost(): boolean {
+        return !this._sessionService.tenantId;
+    }
+
     getLanguages(): void {
         this.primengTableHelper.showLoadingIndicator();
 
-        this._languageService.getLanguages()
+        this._languageService
+            .getLanguages()
             .pipe(finalize(() => this.primengTableHelper.hideLoadingIndicator()))
-            .subscribe(result => {
-            this.defaultLanguageName = result.defaultLanguageName;
-            this.primengTableHelper.records = result.items;
-            this.primengTableHelper.totalRecordsCount = result.items.length;
-            this.primengTableHelper.hideLoadingIndicator();
-        });
+            .subscribe((result) => {
+                this.defaultLanguageName = result.defaultLanguageName;
+                this.primengTableHelper.records = result.items;
+                this.primengTableHelper.totalRecordsCount = result.items.length;
+                this.primengTableHelper.hideLoadingIndicator();
+            });
     }
 
     changeTexts(language: ApplicationLanguageListDto): void {
@@ -62,7 +71,7 @@ export class LanguagesComponent extends AppComponentBase {
         this.message.confirm(
             this.l('LanguageDeleteWarningMessage', language.displayName),
             this.l('AreYouSure'),
-            isConfirmed => {
+            (isConfirmed) => {
                 if (isConfirmed) {
                     this._languageService.deleteLanguage(language.id).subscribe(() => {
                         this.getLanguages();
@@ -73,7 +82,4 @@ export class LanguagesComponent extends AppComponentBase {
         );
     }
 
-    get multiTenancySideIsHost(): boolean {
-        return !this._sessionService.tenantId;
-    }
 }

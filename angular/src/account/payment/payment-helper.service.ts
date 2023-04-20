@@ -3,12 +3,11 @@ import {
     EditionPaymentType,
     SubscriptionPaymentGatewayType,
     EditionSelectDto,
-    PaymentPeriodType
+    PaymentPeriodType,
 } from '@shared/service-proxies/service-proxies';
 
 @Injectable()
 export class PaymentHelperService {
-
     getPaymentGatewayType(gatewayType) {
         if (parseInt(gatewayType) === SubscriptionPaymentGatewayType.Paypal) {
             return 'Paypal';

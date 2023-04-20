@@ -55,15 +55,15 @@ namespace CoreOSR.Tests.Features
                 });
 
 
-            var premiumEditon = (await _editionAppService.GetEditions()).Items.FirstOrDefault(e => e.DisplayName == "Premium Edition");
-            premiumEditon.ShouldNotBeNull();
+            var premiumEdition = (await _editionAppService.GetEditions()).Items.FirstOrDefault(e => e.DisplayName == "Premium Edition");
+            premiumEdition.ShouldNotBeNull();
 
             await UsingDbContextAsync(async context =>
             {
                 var tenant = await context.Tenants.SingleAsync(t => t.TenancyName == AbpTenantBase.DefaultTenantName);
-                tenant.EditionId = premiumEditon.Id;
+                tenant.EditionId = premiumEdition.Id;
 
-                context.SaveChanges();
+                await context.SaveChangesAsync();
             });
 
             LoginAsDefaultTenantAdmin();

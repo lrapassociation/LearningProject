@@ -1,7 +1,9 @@
-﻿namespace CoreOSR.Authorization.Users.Profile.Dto
+﻿using System.Collections.Generic;
+
+namespace CoreOSR.Authorization.Users.Profile.Dto
 {
     public class UpdateGoogleAuthenticatorKeyOutput
     {
-        public string QrCodeSetupImageUrl { get; set; }
+        public IEnumerable<string> RecoveryCodes { get; set; }
     }
 }

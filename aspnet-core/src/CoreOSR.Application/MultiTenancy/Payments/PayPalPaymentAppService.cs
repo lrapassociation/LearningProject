@@ -40,7 +40,8 @@ namespace CoreOSR.MultiTenancy.Payments
             {
                 ClientId = _payPalPaymentGatewayConfiguration.ClientId,
                 DemoUsername = _payPalPaymentGatewayConfiguration.DemoUsername,
-                DemoPassword = _payPalPaymentGatewayConfiguration.DemoPassword
+                DemoPassword = _payPalPaymentGatewayConfiguration.DemoPassword,
+                DisabledFundings = _payPalPaymentGatewayConfiguration.DisabledFundings
             };
         }
     }

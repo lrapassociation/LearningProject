@@ -67,7 +67,9 @@ namespace CoreOSR.MultiTenancy
                 input.SendActivationEmail,
                 input.SubscriptionEndDateUtc?.ToUniversalTime(),
                 input.IsInTrialPeriod,
-                AppUrlService.CreateEmailActivationUrlFormat(input.TenancyName)
+                AppUrlService.CreateEmailActivationUrlFormat(input.TenancyName),
+                adminName:input.AdminName,
+                adminSurname:input.AdminSurname
             );
         }
 
@@ -89,7 +91,7 @@ namespace CoreOSR.MultiTenancy
 
             if (tenant.EditionId != input.EditionId)
             {
-                EventBus.Trigger(new TenantEditionChangedEventData
+                await EventBus.TriggerAsync(new TenantEditionChangedEventData
                 {
                     TenantId = input.Id,
                     OldEditionId = tenant.EditionId,

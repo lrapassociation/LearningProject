@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Abp.Extensions;
 using Microsoft.Extensions.Configuration;
 using CoreOSR.Configuration;
@@ -22,8 +23,11 @@ namespace CoreOSR.MultiTenancy.Payments.Paypal
 
         public bool IsActive => _appConfiguration["Payment:PayPal:IsActive"].To<bool>();
 
+        public List<string> DisabledFundings =>
+            _appConfiguration.GetSection("Payment:PayPal:DisabledFundings").Get<List<string>>();
+
         public bool SupportsRecurringPayments => false;
-        
+
         public PayPalPaymentGatewayConfiguration(IAppConfigurationAccessor configurationAccessor)
         {
             _appConfiguration = configurationAccessor.Configuration;

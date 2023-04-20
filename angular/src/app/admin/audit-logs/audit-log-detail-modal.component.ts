@@ -1,29 +1,32 @@
 import { Component, Injector, ViewChild } from '@angular/core';
+import { DateTimeService } from '@app/shared/common/timing/date-time.service';
 import { AppComponentBase } from '@shared/common/app-component-base';
 import { AuditLogListDto } from '@shared/service-proxies/service-proxies';
-import * as moment from 'moment';
-import { ModalDirective } from 'ngx-bootstrap';
+import { DateTime } from 'luxon';
+import { ModalDirective } from 'ngx-bootstrap/modal';
 
 @Component({
     selector: 'auditLogDetailModal',
-    templateUrl: './audit-log-detail-modal.component.html'
+    templateUrl: './audit-log-detail-modal.component.html',
 })
 export class AuditLogDetailModalComponent extends AppComponentBase {
-
-    @ViewChild('auditLogDetailModal', {static: true}) modal: ModalDirective;
+    @ViewChild('auditLogDetailModal', { static: true }) modal: ModalDirective;
 
     active = false;
     auditLog: AuditLogListDto;
 
-    constructor(
-        injector: Injector
-    ) {
+    constructor(injector: Injector, private _dateTimeService: DateTimeService) {
         super(injector);
     }
 
     getExecutionTime(): string {
         const self = this;
-        return moment(self.auditLog.executionTime).fromNow() + ' (' + moment(self.auditLog.executionTime).format('YYYY-MM-DD HH:mm:ss') + ')';
+        return (
+            this._dateTimeService.fromNow(self.auditLog.executionTime) +
+            ' (' +
+            this._dateTimeService.formatDate(self.auditLog.executionTime, 'yyyy-LL-dd HH:mm:ss') +
+            ')'
+        );
     }
 
     getDurationAsMs(): string {

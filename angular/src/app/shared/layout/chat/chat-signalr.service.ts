@@ -1,39 +1,49 @@
 import { Injectable, Injector, NgZone } from '@angular/core';
 import { AppComponentBase } from '@shared/common/app-component-base';
-import { HubConnection } from '@aspnet/signalr';
+import { HubConnection } from '@microsoft/signalr';
 
 @Injectable()
 export class ChatSignalrService extends AppComponentBase {
-
-    constructor(
-        injector: Injector,
-        public _zone: NgZone
-    ) {
-        super(injector);
-    }
-
     chatHub: HubConnection;
     isChatConnected = false;
+
+    constructor(injector: Injector, public _zone: NgZone) {
+        super(injector);
+    }
 
     configureConnection(connection): void {
         // Set the common hub
         this.chatHub = connection;
 
         // Reconnect loop
+        let reconnectTime = 5000;
+        let tries = 1;
+        let maxTries = 8;
         function start() {
             return new Promise(function (resolve, reject) {
-                connection.start()
-                    .then(resolve)
-                    .catch(() => {
-                        setTimeout(() => {
-                            start().then(resolve);
-                        }, 5000);
-                    });
+                if (tries > maxTries) {
+                    reject();
+                } else {
+                    connection
+                        .start()
+                        .then(resolve)
+                        .then(() => {
+                            reconnectTime = 5000;
+                            tries = 1;
+                        })
+                        .catch(() => {
+                            setTimeout(() => {
+                                start().then(resolve);
+                            }, reconnectTime);
+                            reconnectTime *= 2;
+                            tries += 1;
+                        });
+                }
             });
         }
 
         // Reconnect if hub disconnects
-        connection.onclose(e => {
+        connection.onclose((e) => {
             this.isChatConnected = false;
 
             if (e) {
@@ -52,11 +62,11 @@ export class ChatSignalrService extends AppComponentBase {
     }
 
     registerChatEvents(connection): void {
-        connection.on('getChatMessage', message => {
+        connection.on('getChatMessage', (message) => {
             abp.event.trigger('app.chat.messageReceived', message);
         });
 
-        connection.on('getAllFriends', friends => {
+        connection.on('getAllFriends', (friends) => {
             abp.event.trigger('abp.chat.friendListChanged', friends);
         });
 
@@ -65,33 +75,29 @@ export class ChatSignalrService extends AppComponentBase {
         });
 
         connection.on('getUserConnectNotification', (friend, isConnected) => {
-            abp.event.trigger('app.chat.userConnectionStateChanged',
-                {
-                    friend: friend,
-                    isConnected: isConnected
-                });
+            abp.event.trigger('app.chat.userConnectionStateChanged', {
+                friend: friend,
+                isConnected: isConnected,
+            });
         });
 
         connection.on('getUserStateChange', (friend, state) => {
-            abp.event.trigger('app.chat.userStateChanged',
-                {
-                    friend: friend,
-                    state: state
-                });
+            abp.event.trigger('app.chat.userStateChanged', {
+                friend: friend,
+                state: state,
+            });
         });
 
-        connection.on('getallUnreadMessagesOfUserRead', friend => {
-            abp.event.trigger('app.chat.allUnreadMessagesOfUserRead',
-                {
-                    friend: friend
-                });
+        connection.on('getallUnreadMessagesOfUserRead', (friend) => {
+            abp.event.trigger('app.chat.allUnreadMessagesOfUserRead', {
+                friend: friend,
+            });
         });
 
-        connection.on('getReadStateChange', friend => {
-            abp.event.trigger('app.chat.readStateChange',
-                {
-                    friend: friend
-                });
+        connection.on('getReadStateChange', (friend) => {
+            abp.event.trigger('app.chat.readStateChange', {
+                friend: friend,
+            });
         });
     }
 
@@ -105,32 +111,37 @@ export class ChatSignalrService extends AppComponentBase {
             return;
         }
 
-        this.chatHub.invoke('sendMessage', messageData).then(result => {
-            if (result) {
-                abp.notify.warn(result);
-            }
+        this.chatHub
+            .invoke('sendMessage', messageData)
+            .then((result) => {
+                if (result) {
+                    abp.notify.warn(result);
+                }
 
-            if (callback) {
-                callback();
-            }
-        }).catch(error => {
-            abp.log.error(error);
+                if (callback) {
+                    callback();
+                }
+            })
+            .catch((error) => {
+                abp.log.error(error);
 
-            if (callback) {
-                callback();
-            }
-        });
+                if (callback) {
+                    callback();
+                }
+            });
     }
 
     init(): void {
         this._zone.runOutsideAngular(() => {
             abp.signalr.connect();
-            abp.signalr.startConnection(abp.appPath + 'signalr-chat', connection => {
-                this.configureConnection(connection);
-            }).then(() => {
-                abp.event.trigger('app.chat.connected');
-                this.isChatConnected = true;
-            });
+            abp.signalr
+                .startConnection(abp.appPath + 'signalr-chat', (connection) => {
+                    this.configureConnection(connection);
+                })
+                .then(() => {
+                    abp.event.trigger('app.chat.connected');
+                    this.isChatConnected = true;
+                });
         });
     }
 }

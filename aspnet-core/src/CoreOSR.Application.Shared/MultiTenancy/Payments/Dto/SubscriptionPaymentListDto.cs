@@ -14,7 +14,7 @@ namespace CoreOSR.MultiTenancy.Payments.Dto
 
         public string PaymentPeriodType { get; set; }
 
-        public string PaymentId { get; set; }
+        public string ExternalPaymentId { get; set; }
 
         public string PayerId { get; set; }
 

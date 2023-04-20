@@ -1,6 +1,8 @@
 ﻿using System.Threading.Tasks;
 using Abp;
 using Abp.Configuration;
+using Abp.Localization;
+using Abp.UI;
 using CoreOSR.Configuration;
 using CoreOSR.Configuration.Dto;
 using CoreOSR.UiCustomization;
@@ -10,9 +12,14 @@ namespace CoreOSR.Web.UiCustomization.Metronic
 {
     public class ThemeDefaultUiCustomizer : UiThemeCustomizerBase, IUiCustomizer
     {
-        public ThemeDefaultUiCustomizer(ISettingManager settingManager)
+        private readonly ILocalizationManager _localizationManager;
+
+        public ThemeDefaultUiCustomizer(
+            ISettingManager settingManager,
+            ILocalizationManager localizationManager)
             : base(settingManager, AppConsts.ThemeDefault)
         {
+            _localizationManager = localizationManager;
         }
 
         public async Task<UiCustomizationSettingsDto> GetUiSettings()
@@ -21,24 +28,28 @@ namespace CoreOSR.Web.UiCustomization.Metronic
             {
                 BaseSettings = new ThemeSettingsDto
                 {
-                    Header = new ThemeHeaderSettingsDto
+                    Layout = new ThemeLayoutSettingsDto
                     {
-                        DesktopFixedHeader = await GetSettingValueAsync<bool>(AppSettings.UiManagement.Header.DesktopFixedHeader),
-                        MobileFixedHeader = await GetSettingValueAsync<bool>(AppSettings.UiManagement.Header.MobileFixedHeader),
-                        HeaderSkin = await GetSettingValueAsync(AppSettings.UiManagement.Header.Skin)
+                        DarkMode = await GetSettingValueAsync<bool>(AppSettings.UiManagement.DarkMode)
                     },
                     SubHeader = new ThemeSubHeaderSettingsDto
                     {
-                        FixedSubHeader = await GetSettingValueAsync<bool>(AppSettings.UiManagement.SubHeader.Fixed),
-                        SubheaderStyle = await GetSettingValueAsync(AppSettings.UiManagement.SubHeader.Style)
+                        FixedSubHeader = true,
+                        SubheaderStyle = await GetSettingValueAsync(AppSettings.UiManagement.SubHeader.Style),
+                        ContainerStyle = "app-toolbar py-3 py-lg-6"
                     },
                     Menu = new ThemeMenuSettingsDto
                     {
                         AsideSkin = await GetSettingValueAsync(AppSettings.UiManagement.LeftAside.AsideSkin),
-                        FixedAside = await GetSettingValueAsync<bool>(AppSettings.UiManagement.LeftAside.FixedAside),
-                        AllowAsideMinimizing = await GetSettingValueAsync<bool>(AppSettings.UiManagement.LeftAside.AllowAsideMinimizing),
-                        DefaultMinimizedAside = await GetSettingValueAsync<bool>(AppSettings.UiManagement.LeftAside.DefaultMinimizedAside),
-                        SubmenuToggle = await GetSettingValueAsync(AppSettings.UiManagement.LeftAside.SubmenuToggle)
+                        FixedAside = true,
+                        AllowAsideMinimizing =
+                            await GetSettingValueAsync<bool>(AppSettings.UiManagement.LeftAside.AllowAsideMinimizing),
+                        DefaultMinimizedAside =
+                            await GetSettingValueAsync<bool>(AppSettings.UiManagement.LeftAside.DefaultMinimizedAside),
+                        SubmenuToggle = await GetSettingValueAsync(AppSettings.UiManagement.LeftAside.SubmenuToggle),
+                        HoverableAside =
+                            await GetSettingValueAsync<bool>(AppSettings.UiManagement.LeftAside.HoverableAside),
+                        SearchActive = await GetSettingValueAsync<bool>(AppSettings.UiManagement.SearchActive),
                     },
                     Footer = new ThemeFooterSettingsDto
                     {
@@ -50,6 +61,10 @@ namespace CoreOSR.Web.UiCustomization.Metronic
             settings.BaseSettings.Theme = ThemeName;
             settings.BaseSettings.Layout.LayoutType = "fluid";
             settings.BaseSettings.Menu.Position = "left";
+            settings.BaseSettings.SubHeader.SubheaderSize = 1;
+            settings.BaseSettings.SubHeader.TitleStyle =
+                "page-heading d-flex text-dark fw-bold fs-3 flex-column justify-content-center my-0";
+            settings.BaseSettings.SubHeader.ContainerStyle = "app-toolbar py-3 py-lg-6";
 
             settings.IsLeftMenuUsed = true;
             settings.IsTopMenuUsed = false;
@@ -60,62 +75,116 @@ namespace CoreOSR.Web.UiCustomization.Metronic
 
         public async Task UpdateUserUiManagementSettingsAsync(UserIdentifier user, ThemeSettingsDto settings)
         {
+            ValidateSettings(settings);
+            
             await SettingManager.ChangeSettingForUserAsync(user, AppSettings.UiManagement.Theme, ThemeName);
 
-            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.Header.DesktopFixedHeader, settings.Header.DesktopFixedHeader.ToString());
-            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.Header.MobileFixedHeader, settings.Header.MobileFixedHeader.ToString());
-            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.Header.Skin, settings.Header.HeaderSkin);
+            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.DarkMode,
+                settings.Layout.DarkMode.ToString());
 
-            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.SubHeader.Fixed, settings.SubHeader.FixedSubHeader.ToString());
-            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.SubHeader.Style, settings.SubHeader.SubheaderStyle);
+            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.Header.DesktopFixedHeader,
+                settings.Header.DesktopFixedHeader.ToString());
+            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.Header.MobileFixedHeader,
+                settings.Header.MobileFixedHeader.ToString());
 
-            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.LeftAside.AsideSkin, settings.Menu.AsideSkin);
-            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.LeftAside.FixedAside, settings.Menu.FixedAside.ToString());
-            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.LeftAside.AllowAsideMinimizing, settings.Menu.AllowAsideMinimizing.ToString());
-            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.LeftAside.DefaultMinimizedAside, settings.Menu.DefaultMinimizedAside.ToString());
-            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.LeftAside.SubmenuToggle, settings.Menu.SubmenuToggle);
+            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.SubHeader.Fixed,
+                settings.SubHeader.FixedSubHeader.ToString());
+            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.SubHeader.Style,
+                settings.SubHeader.SubheaderStyle);
 
-            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.Footer.FixedFooter, settings.Footer.FixedFooter.ToString());
+            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.LeftAside.AsideSkin,
+                settings.Menu.AsideSkin);
+            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.LeftAside.AllowAsideMinimizing,
+                settings.Menu.AllowAsideMinimizing.ToString());
+            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.LeftAside.DefaultMinimizedAside,
+                settings.Menu.DefaultMinimizedAside.ToString());
+            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.LeftAside.SubmenuToggle,
+                settings.Menu.SubmenuToggle);
+            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.LeftAside.HoverableAside,
+                settings.Menu.HoverableAside.ToString());
+            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.SearchActive,
+                settings.Menu.SearchActive.ToString());
+
+            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.Footer.FixedFooter,
+                settings.Footer.FixedFooter.ToString());
         }
 
-        public async Task UpdateTenantUiManagementSettingsAsync(int tenantId, ThemeSettingsDto settings)
+        public async Task UpdateTenantUiManagementSettingsAsync(int tenantId, ThemeSettingsDto settings,
+            UserIdentifier changerUser)
         {
+            ValidateSettings(settings);
+            
             await SettingManager.ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.Theme, settings.Theme);
 
-            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.Header.DesktopFixedHeader, settings.Header.DesktopFixedHeader.ToString());
-            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.Header.MobileFixedHeader, settings.Header.MobileFixedHeader.ToString());
-            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.Header.Skin, settings.Header.HeaderSkin);
+            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.DarkMode,
+                settings.Layout.DarkMode.ToString());
 
-            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.SubHeader.Fixed, settings.SubHeader.FixedSubHeader.ToString());
-            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.SubHeader.Style, settings.SubHeader.SubheaderStyle);
+            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.Header.DesktopFixedHeader,
+                settings.Header.DesktopFixedHeader.ToString());
+            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.Header.MobileFixedHeader,
+                settings.Header.MobileFixedHeader.ToString());
 
-            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.LeftAside.AsideSkin, settings.Menu.AsideSkin);
-            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.LeftAside.FixedAside, settings.Menu.FixedAside.ToString());
-            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.LeftAside.AllowAsideMinimizing, settings.Menu.AllowAsideMinimizing.ToString());
-            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.LeftAside.DefaultMinimizedAside, settings.Menu.DefaultMinimizedAside.ToString());
-            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.LeftAside.SubmenuToggle, settings.Menu.SubmenuToggle);
+            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.SubHeader.Fixed,
+                settings.SubHeader.FixedSubHeader.ToString());
+            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.SubHeader.Style,
+                settings.SubHeader.SubheaderStyle);
 
-            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.Footer.FixedFooter, settings.Footer.FixedFooter.ToString());
+            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.LeftAside.AsideSkin,
+                settings.Menu.AsideSkin);
+            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.LeftAside.AllowAsideMinimizing,
+                settings.Menu.AllowAsideMinimizing.ToString());
+            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.LeftAside.DefaultMinimizedAside,
+                settings.Menu.DefaultMinimizedAside.ToString());
+            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.LeftAside.SubmenuToggle,
+                settings.Menu.SubmenuToggle);
+            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.LeftAside.HoverableAside,
+                settings.Menu.HoverableAside.ToString());
+            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.SearchActive,
+                settings.Menu.SearchActive.ToString());
+
+            await ChangeSettingForTenantAsync(tenantId, AppSettings.UiManagement.Footer.FixedFooter,
+                settings.Footer.FixedFooter.ToString());
+
+            await ResetDarkModeSettingsAsync(changerUser);
         }
 
-        public async Task UpdateApplicationUiManagementSettingsAsync(ThemeSettingsDto settings)
+        public async Task UpdateApplicationUiManagementSettingsAsync(ThemeSettingsDto settings,
+            UserIdentifier changerUser)
         {
+            ValidateSettings(settings);
+            
             await SettingManager.ChangeSettingForApplicationAsync(AppSettings.UiManagement.Theme, settings.Theme);
 
-            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.Header.DesktopFixedHeader, settings.Header.DesktopFixedHeader.ToString());
-            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.Header.MobileFixedHeader, settings.Header.MobileFixedHeader.ToString());
-            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.Header.Skin, settings.Header.HeaderSkin);
+            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.DarkMode,
+                settings.Layout.DarkMode.ToString());
 
-            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.SubHeader.Fixed, settings.SubHeader.FixedSubHeader.ToString());
-            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.SubHeader.Style, settings.SubHeader.SubheaderStyle);
+            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.Header.DesktopFixedHeader,
+                settings.Header.DesktopFixedHeader.ToString());
+            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.Header.MobileFixedHeader,
+                settings.Header.MobileFixedHeader.ToString());
 
-            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.LeftAside.AsideSkin, settings.Menu.AsideSkin);
-            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.LeftAside.FixedAside, settings.Menu.FixedAside.ToString());
-            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.LeftAside.AllowAsideMinimizing, settings.Menu.AllowAsideMinimizing.ToString());
-            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.LeftAside.DefaultMinimizedAside, settings.Menu.DefaultMinimizedAside.ToString());
-            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.LeftAside.SubmenuToggle, settings.Menu.SubmenuToggle);
+            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.SubHeader.Fixed,
+                settings.SubHeader.FixedSubHeader.ToString());
+            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.SubHeader.Style,
+                settings.SubHeader.SubheaderStyle);
 
-            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.Footer.FixedFooter, settings.Footer.FixedFooter.ToString());
+            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.LeftAside.AsideSkin,
+                settings.Menu.AsideSkin);
+            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.LeftAside.AllowAsideMinimizing,
+                settings.Menu.AllowAsideMinimizing.ToString());
+            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.LeftAside.DefaultMinimizedAside,
+                settings.Menu.DefaultMinimizedAside.ToString());
+            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.LeftAside.SubmenuToggle,
+                settings.Menu.SubmenuToggle);
+            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.LeftAside.HoverableAside,
+                settings.Menu.HoverableAside.ToString());
+            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.SearchActive,
+                settings.Menu.SearchActive.ToString());
+
+            await ChangeSettingForApplicationAsync(AppSettings.UiManagement.Footer.FixedFooter,
+                settings.Footer.FixedFooter.ToString());
+
+            await ResetDarkModeSettingsAsync(changerUser);
         }
 
         public async Task<ThemeSettingsDto> GetHostUiManagementSettings()
@@ -125,28 +194,38 @@ namespace CoreOSR.Web.UiCustomization.Metronic
             return new ThemeSettingsDto
             {
                 Theme = theme,
-                Header = new ThemeHeaderSettingsDto
+                Layout = new ThemeLayoutSettingsDto
                 {
-                    DesktopFixedHeader = await GetSettingValueForApplicationAsync<bool>(AppSettings.UiManagement.Header.DesktopFixedHeader),
-                    MobileFixedHeader = await GetSettingValueForApplicationAsync<bool>(AppSettings.UiManagement.Header.MobileFixedHeader),
-                    HeaderSkin = await GetSettingValueForApplicationAsync(AppSettings.UiManagement.Header.Skin)
+                    DarkMode = await GetSettingValueForApplicationAsync<bool>(AppSettings.UiManagement.DarkMode)
                 },
                 SubHeader = new ThemeSubHeaderSettingsDto
                 {
-                    FixedSubHeader = await GetSettingValueForApplicationAsync<bool>(AppSettings.UiManagement.SubHeader.Fixed),
+                    FixedSubHeader =
+                        await GetSettingValueForApplicationAsync<bool>(AppSettings.UiManagement.SubHeader.Fixed),
                     SubheaderStyle = await GetSettingValueForApplicationAsync(AppSettings.UiManagement.SubHeader.Style)
                 },
                 Menu = new ThemeMenuSettingsDto
                 {
                     AsideSkin = await GetSettingValueForApplicationAsync(AppSettings.UiManagement.LeftAside.AsideSkin),
-                    FixedAside = await GetSettingValueForApplicationAsync<bool>(AppSettings.UiManagement.LeftAside.FixedAside),
-                    AllowAsideMinimizing = await GetSettingValueForApplicationAsync<bool>(AppSettings.UiManagement.LeftAside.AllowAsideMinimizing),
-                    DefaultMinimizedAside = await GetSettingValueForApplicationAsync<bool>(AppSettings.UiManagement.LeftAside.DefaultMinimizedAside),
-                    SubmenuToggle = await GetSettingValueForApplicationAsync(AppSettings.UiManagement.LeftAside.SubmenuToggle)
+                    FixedAside = true,
+                    AllowAsideMinimizing =
+                        await GetSettingValueForApplicationAsync<bool>(AppSettings.UiManagement.LeftAside
+                            .AllowAsideMinimizing),
+                    DefaultMinimizedAside =
+                        await GetSettingValueForApplicationAsync<bool>(AppSettings.UiManagement.LeftAside
+                            .DefaultMinimizedAside),
+                    SubmenuToggle =
+                        await GetSettingValueForApplicationAsync(AppSettings.UiManagement.LeftAside.SubmenuToggle),
+                    HoverableAside =
+                        await GetSettingValueForApplicationAsync<bool>(
+                            AppSettings.UiManagement.LeftAside.HoverableAside),
+                    SearchActive =
+                        await GetSettingValueForApplicationAsync<bool>(AppSettings.UiManagement.SearchActive),
                 },
                 Footer = new ThemeFooterSettingsDto
                 {
-                    FixedFooter = await GetSettingValueForApplicationAsync<bool>(AppSettings.UiManagement.Footer.FixedFooter)
+                    FixedFooter =
+                        await GetSettingValueForApplicationAsync<bool>(AppSettings.UiManagement.Footer.FixedFooter)
                 }
             };
         }
@@ -158,30 +237,71 @@ namespace CoreOSR.Web.UiCustomization.Metronic
             return new ThemeSettingsDto
             {
                 Theme = theme,
-                Header = new ThemeHeaderSettingsDto
+                Layout = new ThemeLayoutSettingsDto
                 {
-                    DesktopFixedHeader = await GetSettingValueForTenantAsync<bool>(AppSettings.UiManagement.Header.DesktopFixedHeader, tenantId),
-                    MobileFixedHeader = await GetSettingValueForTenantAsync<bool>(AppSettings.UiManagement.Header.MobileFixedHeader, tenantId),
-                    HeaderSkin = await GetSettingValueForTenantAsync(AppSettings.UiManagement.Header.Skin, tenantId)
+                    DarkMode = await GetSettingValueForTenantAsync<bool>(AppSettings.UiManagement.DarkMode, tenantId),
                 },
                 SubHeader = new ThemeSubHeaderSettingsDto
                 {
-                    FixedSubHeader = await GetSettingValueForTenantAsync<bool>(AppSettings.UiManagement.SubHeader.Fixed, tenantId),
-                    SubheaderStyle = await GetSettingValueForTenantAsync(AppSettings.UiManagement.SubHeader.Style, tenantId)
+                    FixedSubHeader =
+                        await GetSettingValueForTenantAsync<bool>(AppSettings.UiManagement.SubHeader.Fixed, tenantId),
+                    SubheaderStyle =
+                        await GetSettingValueForTenantAsync(AppSettings.UiManagement.SubHeader.Style, tenantId)
                 },
                 Menu = new ThemeMenuSettingsDto
                 {
-                    AsideSkin = await GetSettingValueForTenantAsync(AppSettings.UiManagement.LeftAside.AsideSkin, tenantId),
-                    FixedAside = await GetSettingValueForTenantAsync<bool>(AppSettings.UiManagement.LeftAside.FixedAside, tenantId),
-                    AllowAsideMinimizing = await GetSettingValueForTenantAsync<bool>(AppSettings.UiManagement.LeftAside.AllowAsideMinimizing, tenantId),
-                    DefaultMinimizedAside = await GetSettingValueForTenantAsync<bool>(AppSettings.UiManagement.LeftAside.DefaultMinimizedAside, tenantId),
-                    SubmenuToggle = await GetSettingValueForTenantAsync(AppSettings.UiManagement.LeftAside.SubmenuToggle, tenantId)
+                    AsideSkin = await GetSettingValueForTenantAsync(AppSettings.UiManagement.LeftAside.AsideSkin,
+                        tenantId),
+                    FixedAside = true,
+                    AllowAsideMinimizing =
+                        await GetSettingValueForTenantAsync<bool>(
+                            AppSettings.UiManagement.LeftAside.AllowAsideMinimizing, tenantId),
+                    DefaultMinimizedAside =
+                        await GetSettingValueForTenantAsync<bool>(
+                            AppSettings.UiManagement.LeftAside.DefaultMinimizedAside, tenantId),
+                    SubmenuToggle =
+                        await GetSettingValueForTenantAsync(AppSettings.UiManagement.LeftAside.SubmenuToggle, tenantId),
+                    HoverableAside =
+                        await GetSettingValueForTenantAsync<bool>(AppSettings.UiManagement.LeftAside.HoverableAside,
+                            tenantId),
+                    SearchActive = await GetSettingValueForApplicationAsync<bool>(AppSettings.UiManagement.SearchActive)
                 },
                 Footer = new ThemeFooterSettingsDto
                 {
-                    FixedFooter = await GetSettingValueForTenantAsync<bool>(AppSettings.UiManagement.Footer.FixedFooter, tenantId)
+                    FixedFooter =
+                        await GetSettingValueForTenantAsync<bool>(AppSettings.UiManagement.Footer.FixedFooter, tenantId)
                 }
             };
+        }
+
+        protected override async Task ResetDarkModeSettingsAsync(UserIdentifier user)
+        {
+            await base.ResetDarkModeSettingsAsync(user);
+
+            string asideSkinSetting;
+            if (user.TenantId.HasValue)
+            {
+                asideSkinSetting = await GetSettingValueForTenantAsync(AppSettings.UiManagement.LeftAside.AsideSkin,
+                    user.TenantId.Value);
+            }
+            else
+            {
+                asideSkinSetting =
+                    await GetSettingValueForApplicationAsync(AppSettings.UiManagement.LeftAside.AsideSkin);
+            }
+
+            await ChangeSettingForUserAsync(user, AppSettings.UiManagement.LeftAside.AsideSkin, asideSkinSetting);
+        }
+
+        private void ValidateSettings(ThemeSettingsDto settings)
+        {
+            if (settings.Menu.AllowAsideMinimizing && !settings.Menu.HoverableAside)
+            {
+                throw new UserFriendlyException(
+                    _localizationManager.GetSource(CoreOSRConsts.LocalizationSourceName)
+                        .GetString("AllowAsideMinimizing_HoverableAside_Warning")
+                );
+            }
         }
     }
 }

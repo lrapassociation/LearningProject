@@ -1,8 +1,10 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations.Schema;
 using Abp.Application.Editions;
+using Abp.Domain.Entities;
 using Abp.Domain.Entities.Auditing;
 using Abp.MultiTenancy;
+using CoreOSR.Editions;
 
 namespace CoreOSR.MultiTenancy.Payments
 {
@@ -37,6 +39,8 @@ namespace CoreOSR.MultiTenancy.Payments
         public string SuccessUrl { get; set; }
 
         public string ErrorUrl { get; set; }
+
+        public EditionPaymentType EditionPaymentType { get; set; }
 
         public void SetAsCancelled()
         {
@@ -87,6 +91,11 @@ namespace CoreOSR.MultiTenancy.Payments
                 default:
                     throw new NotImplementedException($"PaymentPeriodType for {DayCount} day could not found");
             }
+        }
+
+        public bool IsProrationPayment()
+        {
+            return IsRecurring && EditionPaymentType == EditionPaymentType.Upgrade;
         }
     }
 }

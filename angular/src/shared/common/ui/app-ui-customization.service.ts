@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { UiCustomizationSettingsDto } from '@shared/service-proxies/service-proxies';
 import * as rtlDetect from 'rtl-detect';
+import { ThemeAssetContributorFactory } from '@shared/helpers/ThemeAssetContributorFactory';
 
 @Injectable()
 export class AppUiCustomizationService {
@@ -11,88 +12,35 @@ export class AppUiCustomizationService {
     }
 
     getAppModuleBodyClass(): string {
-        let topMenuUsed = this._theme.baseSettings.menu.position === 'top';
-        const isRtl = rtlDetect.isRtlLang(
-            abp.localization.currentLanguage.name
-        );
+        let assetContributor = ThemeAssetContributorFactory.getCurrent();
+        return assetContributor.getAppModuleBodyClass();
+    }
 
-        let cssClass =
-            'kt-page--' +
-            this._theme.baseSettings.layout.layoutType +
-            ' kt-subheader--enabled kt-aside-left--offcanvas';
-
-        if (this._theme.baseSettings.header.desktopFixedHeader) {
-            cssClass += ' kt-header--fixed';
-        } else {
-            cssClass += ' kt-header--static';
-        }
-
-        if (this._theme.baseSettings.header.mobileFixedHeader) {
-            cssClass += ' kt-header-mobile--fixed';
-        }
-
-        if (this._theme.baseSettings.menu.fixedAside && !topMenuUsed) {
-            cssClass += ' kt-aside--fixed';
-        }
-
-        if (this._theme.baseSettings.menu.defaultMinimizedAside) {
-            cssClass += ' kt-aside--minimize';
-        }
-
-        if (isRtl) {
-            cssClass += ' kt-quick-panel--left kt-demo-panel--left';
-        } else {
-            cssClass += ' kt-quick-panel--right kt-demo-panel--right';
-        }
-
-        if (this._theme.baseSettings.menu.position === 'left') {
-            cssClass += ' kt-aside-left--enabled kt-aside--enabled';
-            cssClass +=
-                ' kt-subheader--' +
-                this._theme.baseSettings.subHeader.subheaderStyle;
-
-            if (this._theme.baseSettings.menu.fixedAside) {
-                cssClass += ' kt-aside--fixed';
-            } else {
-                cssClass += ' kt-aside--static';
-            }
-        } else {
-            cssClass += ' kt-subheader--transparent';
-        }
-
-        if (topMenuUsed) {
-            cssClass +=
-                ' kt-header--minimize-' +
-                this._theme.baseSettings.header.minimizeDesktopHeaderType;
-        }
-
-        if (this._theme.baseSettings.subHeader.fixedSubHeader) {
-            cssClass += ' kt-subheader--fixed';
-        }
-
-        if (
-            this._theme.baseSettings.footer.fixedFooter &&
-            this._theme.baseSettings.layout.layoutType !== 'fixed'
-        ) {
-            cssClass += ' kt-footer--fixed';
-        }
-
-        return cssClass;
+    getAppModuleBodyStyle(): string {
+        return '--kt-toolbar-height:55px; --kt-toolbar-height-tablet-and-mobile:55px;';
     }
 
     getAccountModuleBodyClass() {
-        return 'kt-header--fixed kt-header-mobile--fixed kt-subheader--fixed kt-subheader--enabled kt-subheader--solid kt-aside--enabled kt-aside--fixed kt-page--loading';
+        return 'account header-fixed header-mobile-fixed subheader-fixed subheader-enabled subheader-solid aside-enabled aside-fixed page-loading';
+    }
+
+    getAccountModuleBodyStyle(): string {
+        return '';
     }
 
     getSelectEditionBodyClass() {
-        return 'm--skin-';
+        return 'skin-';
     }
 
     getLeftAsideClass(): string {
-        let cssClass = 'kt-aside-menu';
+        let cssClass = 'aside aside-' + this._theme.baseSettings.menu.asideSkin;
+
+        if (this._theme.baseSettings.menu.hoverableAside){
+            cssClass += ' aside-hoverable';
+        }
 
         if (this._theme.baseSettings.menu.submenuToggle === 'true') {
-            cssClass += ' kt-aside-menu--dropdown';
+            cssClass += ' aside-menu-dropdown';
         }
 
         if (this._theme.baseSettings.menu.fixedAside && this._theme.baseSettings.menu.submenuToggle !== 'true') {
@@ -102,38 +50,42 @@ export class AppUiCustomizationService {
         return cssClass;
     }
 
+    getLeftAsideSubMenuStyles(): string {
+        if (this._theme.baseSettings.menu.submenuToggle !== 'true') {
+            return '';
+        }
+        return 'position: fixed; top:inherit';
+    }
+
     isSubmenuToggleDropdown(): boolean {
         return this._theme.baseSettings.menu.submenuToggle === 'true';
     }
 
     getTopBarMenuContainerClass(): string {
         let menuCssClass =
-            'm-header__bottom m-header-menu--skin-' +
+            'header-bottom header-menu-skin-' +
             this._theme.baseSettings.menu.asideSkin +
-            ' m-container m-container--full-height m-container--responsive';
+            ' container container--full-height container-responsive';
         if (this._theme.baseSettings.layout.layoutType === 'boxed') {
-            return menuCssClass + ' m-container--xxl';
+            return menuCssClass + ' container-xxl';
         }
 
         return menuCssClass;
     }
 
     getIsMenuScrollable(): boolean {
-        return (
-            this._theme.allowMenuScroll &&
-            this._theme.baseSettings.menu.fixedAside
-        );
+        return this._theme.allowMenuScroll && this._theme.baseSettings.menu.fixedAside;
     }
 
     getSideBarMenuItemClass(item, isMenuActive) {
-        let menuCssClass = 'kt-menu__item';
+        let menuCssClass = 'menu-item';
 
         if (item.items.length) {
-            menuCssClass += ' kt-menu__item--submenu';
+            menuCssClass += ' menu-item-submenu';
         }
 
         if (isMenuActive) {
-            menuCssClass += ' kt-menu__item--open kt-menu__item--active';
+            menuCssClass += ' menu-item-open menu-item-active';
         }
 
         return menuCssClass;

@@ -8,18 +8,15 @@ import { IBasicOrganizationUnitInfo } from './basic-organization-unit-info';
 
 @Component({
     templateUrl: './organization-units.component.html',
-    animations: [appModuleAnimation()]
+    animations: [appModuleAnimation()],
 })
 export class OrganizationUnitsComponent extends AppComponentBase {
-
-    @ViewChild('ouMembers', {static: true}) ouMembers: OrganizationUnitMembersComponent;
-    @ViewChild('ouRoles', {static: true}) ouRoles: OrganizationUnitRolesComponent;
-    @ViewChild('ouTree', {static: true}) ouTree: OrganizationTreeComponent;
+    @ViewChild('ouMembers', { static: true }) ouMembers: OrganizationUnitMembersComponent;
+    @ViewChild('ouRoles', { static: true }) ouRoles: OrganizationUnitRolesComponent;
+    @ViewChild('ouTree', { static: true }) ouTree: OrganizationTreeComponent;
     organizationUnit: IBasicOrganizationUnitInfo = null;
 
-    constructor(
-        injector: Injector
-    ) {
+    constructor(injector: Injector) {
         super(injector);
     }
 

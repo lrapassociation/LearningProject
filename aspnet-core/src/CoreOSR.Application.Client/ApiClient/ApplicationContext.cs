@@ -9,7 +9,7 @@ namespace CoreOSR.ApiClient
 {
     public class ApplicationContext : IApplicationContext, ISingletonDependency
     {
-        public TenantInformation CurrentTenant { get; private set; }
+        public virtual TenantInformation CurrentTenant { get; protected set; }
 
         public GetCurrentLoginInformationsOutput LoginInfo { get; private set; }
 

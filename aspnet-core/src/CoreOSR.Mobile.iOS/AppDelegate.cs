@@ -29,17 +29,24 @@ namespace CoreOSR
         public override bool FinishedLaunching(UIApplication app, NSDictionary options)
         {
             AppDomain.CurrentDomain.UnhandledException += CurrentDomainOnUnhandledException;
+
             TaskScheduler.UnobservedTaskException += TaskSchedulerOnUnobservedTaskException;
 
             ApplicationBootstrapper.InitializeIfNeeds<CoreOSRXamarinIosModule>();
- 
+
             global::Xamarin.Forms.Forms.Init();
 
             ImageCircleRenderer.Init();
 
             CachedImageRenderer.Init();
 
+            DebugServerIpAddresses.Current = "192.168.1.100"; //Set this address as your local computer IP. Eg: 192.168.1.120
+
             ConfigureFlurlHttp();
+
+#if DEBUG
+            TrustLocalDeveloperCert();
+#endif
 
             SetExitAction();
 
@@ -47,7 +54,7 @@ namespace CoreOSR
 
             return base.FinishedLaunching(app, options);
         }
-      
+
         private static void TaskSchedulerOnUnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs unobservedTaskExceptionEventArgs)
         {
             ExceptionHandler.LogException(unobservedTaskExceptionEventArgs.Exception);
@@ -79,6 +86,11 @@ namespace CoreOSR
             {
                 c.HttpClientFactory = modernHttpClientFactory;
             });
+        }
+
+        private static void TrustLocalDeveloperCert()
+        {
+            System.Net.ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
         }
     }
 }

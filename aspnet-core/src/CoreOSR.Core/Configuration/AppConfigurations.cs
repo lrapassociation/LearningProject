@@ -23,7 +23,8 @@ namespace CoreOSR.Configuration
             );
         }
 
-        private static IConfigurationRoot BuildConfiguration(string path, string environmentName = null, bool addUserSecrets = false)
+        private static IConfigurationRoot BuildConfiguration(string path, string environmentName = null,
+            bool addUserSecrets = false)
         {
             var builder = new ConfigurationBuilder()
                 .SetBasePath(path)
@@ -38,8 +39,11 @@ namespace CoreOSR.Configuration
 
             if (addUserSecrets)
             {
-                builder.AddUserSecrets(typeof(AppConfigurations).GetAssembly());
+                builder.AddUserSecrets(typeof(AppConfigurations).GetAssembly(), true);
             }
+
+            var builtConfig = builder.Build();
+            new AppAzureKeyVaultConfigurer().Configure(builder, builtConfig);
 
             return builder.Build();
         }

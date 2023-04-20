@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Abp.Configuration.Startup;
 using Abp.Dependency;
@@ -71,14 +72,7 @@ namespace CoreOSR.ApiClient
                 .SetQueryParams(queryParameters)
                 .PostJsonAsync(inputDto);
 
-            if (stripAjaxResponseWrapper)
-            {
-                var response = await httpResponse.ReceiveJson<AjaxResponse<T>>();
-                ValidateAbpResponse(response);
-                return response.Result;
-            }
-
-            return await httpResponse.ReceiveJson<T>();
+            return await ValidateAbpResponse<T>(httpResponse, stripAjaxResponseWrapper);
         }
 
         public async Task<T> PostMultipartAsync<T>(string endpoint, Action<CapturedMultipartContent> buildContent, bool stripAjaxResponseWrapper = true)
@@ -87,14 +81,7 @@ namespace CoreOSR.ApiClient
                 .Request(endpoint)
                 .PostMultipartAsync(buildContent);
 
-            if (stripAjaxResponseWrapper)
-            {
-                var response = await httpResponse.ReceiveJson<AjaxResponse<T>>();
-                ValidateAbpResponse(response);
-                return response.Result;
-            }
-
-            return await httpResponse.ReceiveJson<T>();
+            return await ValidateAbpResponse<T>(httpResponse, stripAjaxResponseWrapper);
         }
 
         public async Task<T> PostMultipartAsync<T>(string endpoint, Stream stream, string fileName, bool stripAjaxResponseWrapper = true)
@@ -102,15 +89,7 @@ namespace CoreOSR.ApiClient
             var httpResponse = GetClient(_accessTokenManager.GetAccessToken())
                     .Request(endpoint)
                     .PostMultipartAsync(multiPartContent => multiPartContent.AddFile("file", stream, fileName));
-
-            if (stripAjaxResponseWrapper)
-            {
-                var response = await httpResponse.ReceiveJson<AjaxResponse<T>>();
-                ValidateAbpResponse(response);
-                return response.Result;
-            }
-
-            return await httpResponse.ReceiveJson<T>();
+            return await ValidateAbpResponse<T>(httpResponse, stripAjaxResponseWrapper);
         }
 
         public async Task<T> PostMultipartAsync<T>(string endpoint, string filePath, bool stripAjaxResponseWrapper = true)
@@ -118,15 +97,7 @@ namespace CoreOSR.ApiClient
             var httpResponse = GetClient(_accessTokenManager.GetAccessToken())
                 .Request(endpoint)
                 .PostMultipartAsync(multiPartContent => multiPartContent.AddFile("file", filePath));
-
-            if (stripAjaxResponseWrapper)
-            {
-                var response = await httpResponse.ReceiveJson<AjaxResponse<T>>();
-                ValidateAbpResponse(response);
-                return response.Result;
-            }
-
-            return await httpResponse.ReceiveJson<T>();
+            return await ValidateAbpResponse<T>(httpResponse, stripAjaxResponseWrapper);
         }
 
         #endregion
@@ -162,10 +133,7 @@ namespace CoreOSR.ApiClient
         public async Task PostAsync(string endpoint, object inputDto, object queryParameters, string accessToken,
             bool stripAjaxResponseWrapper)
         {
-            await GetClient(accessToken)
-                  .Request(endpoint)
-                  .SetQueryParams(queryParameters)
-                  .PostJsonAsync(inputDto);
+            await PostAsync<object>(endpoint, inputDto, queryParameters, accessToken, stripAjaxResponseWrapper);
         }
 
         #endregion
@@ -188,6 +156,11 @@ namespace CoreOSR.ApiClient
             return await GetAsync<T>(endpoint, null, null, true);
         }
 
+        public async Task<T> GetAnonymousAsync<T>(string endpoint, object queryParameters)
+        {
+            return await GetAsync<T>(endpoint, queryParameters, null, true);
+        }
+
         public async Task<T> GetAsync<T>(string endpoint, object queryParameters)
         {
             return await GetAsync<T>(endpoint, queryParameters, _accessTokenManager.GetAccessToken(), true);
@@ -197,16 +170,10 @@ namespace CoreOSR.ApiClient
         {
             var httpResponse = GetClient(accessToken)
                 .Request(endpoint)
-                .SetQueryParams(queryParameters);
+                .SetQueryParams(queryParameters)
+                .GetAsync();
 
-            if (stripAjaxResponseWrapper)
-            {
-                var response = await httpResponse.GetJsonAsync<AjaxResponse<T>>();
-                ValidateAbpResponse(response);
-                return response.Result;
-            }
-
-            return await httpResponse.GetJsonAsync<T>();
+            return await ValidateAbpResponse<T>(httpResponse, stripAjaxResponseWrapper);
         }
 
         #endregion
@@ -225,10 +192,7 @@ namespace CoreOSR.ApiClient
 
         public async Task GetAsync(string endpoint, object queryParameters, string accessToken, bool stripAjaxResponseWrapper)
         {
-            await GetClient(accessToken)
-             .Request(endpoint)
-             .SetQueryParams(queryParameters)
-             .GetAsync();
+            await GetAsync<object>(endpoint, queryParameters, accessToken, stripAjaxResponseWrapper);
         }
 
         #endregion
@@ -270,10 +234,7 @@ namespace CoreOSR.ApiClient
 
         public async Task DeleteAsync(string endpoint, object queryParameters, string accessToken)
         {
-            await GetClient(accessToken)
-                    .Request(endpoint)
-                    .SetQueryParams(queryParameters)
-                    .DeleteAsync();
+            await DeleteAsync<object>(endpoint, queryParameters, accessToken, true);
         }
 
         #endregion
@@ -297,14 +258,7 @@ namespace CoreOSR.ApiClient
                 .SetQueryParams(queryParameters)
                 .DeleteAsync();
 
-            if (stripAjaxResponseWrapper)
-            {
-                var response = await httpResponse.ReceiveJson<AjaxResponse<T>>();
-                ValidateAbpResponse(response);
-                return response.Result;
-            }
-
-            return await httpResponse.ReceiveJson<T>();
+            return await ValidateAbpResponse<T>(httpResponse, stripAjaxResponseWrapper);
         }
 
         #endregion
@@ -333,14 +287,7 @@ namespace CoreOSR.ApiClient
                 .SetQueryParams(queryParameters)
                 .PutJsonAsync(inputDto);
 
-            if (stripAjaxResponseWrapper)
-            {
-                var response = await httpResponse.ReceiveJson<AjaxResponse<T>>();
-                ValidateAbpResponse(response);
-                return response.Result;
-            }
-
-            return await httpResponse.ReceiveJson<T>();
+            return await ValidateAbpResponse<T>(httpResponse, stripAjaxResponseWrapper);
         }
         #endregion
 
@@ -364,10 +311,7 @@ namespace CoreOSR.ApiClient
         public async Task PutAsync(string endpoint, object inputDto, object queryParameters, string accessToken,
             bool stripAjaxResponseWrapper)
         {
-            await GetClient(accessToken)
-                  .Request(endpoint)
-                  .SetQueryParams(queryParameters)
-                  .PutJsonAsync(inputDto);
+            await PutAsync<object>(endpoint, inputDto, queryParameters, accessToken, stripAjaxResponseWrapper);
         }
 
         #endregion
@@ -419,24 +363,41 @@ namespace CoreOSR.ApiClient
             }
         }
 
-        private static void ValidateAbpResponse(AjaxResponseBase response)
+        private static async Task<T> ValidateAbpResponse<T>(Task<IFlurlResponse> httpResponse,
+            bool stripAjaxResponseWrapper)
         {
+            if (!stripAjaxResponseWrapper)
+            {
+                return await httpResponse.ReceiveJson<T>();
+            }
+
+            AjaxResponse<T> response;
+            try
+            {
+                response = await httpResponse.ReceiveJson<AjaxResponse<T>>();
+            }
+            catch (FlurlHttpException e)
+            {
+                response = await e.GetResponseJsonAsync<AjaxResponse<T>>();
+            }
+
             if (response == null)
             {
-                return;
+                return default;
             }
 
             if (response.Success)
             {
-                return;
+                return response.Result;
             }
 
             if (response.Error == null)
             {
-                return;
+                return response.Result;
             }
 
             throw new UserFriendlyException(response.Error.GetConsolidatedMessage());
+
         }
 
         public void Dispose()

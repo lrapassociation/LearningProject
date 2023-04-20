@@ -1,5 +1,5 @@
 {
-  "remoteServiceBaseUrl": "http://localhost:22742",
+  "remoteServiceBaseUrl": "https://localhost:44301",
   "appBaseUrl": "http://localhost:4200",
   "localeMappings": {
     "angular": [
@@ -24,7 +24,7 @@
         "to": "en"
       }
     ],
-    "moment": [
+    "luxon": [
       {
         "from": "es-MX",
         "to": "es"
@@ -36,6 +36,16 @@
       {
         "from": "vi",
         "to": "en-gb"
+      }
+    ],
+    "recaptcha": [
+      {
+        "from": "zh-Hans",
+        "to": "zh-cn"
+      },
+      {
+        "from": "es-MX",
+        "to": "es"
       }
     ]
   }

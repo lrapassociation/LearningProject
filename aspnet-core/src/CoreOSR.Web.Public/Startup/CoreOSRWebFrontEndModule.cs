@@ -16,7 +16,7 @@ namespace CoreOSR.Web.Public.Startup
     {
         private readonly IConfigurationRoot _appConfiguration;
 
-        public CoreOSRWebFrontEndModule(IHostingEnvironment env, CoreOSREntityFrameworkCoreModule abpZeroTemplateEntityFrameworkCoreModule)
+        public CoreOSRWebFrontEndModule(IWebHostEnvironment env, CoreOSREntityFrameworkCoreModule abpZeroTemplateEntityFrameworkCoreModule)
         {
             _appConfiguration = env.GetAppConfiguration();
             abpZeroTemplateEntityFrameworkCoreModule.SkipDbSeed = true;
@@ -24,7 +24,7 @@ namespace CoreOSR.Web.Public.Startup
 
         public override void PreInitialize()
         {
-            Configuration.Modules.AbpWebCommon().MultiTenancy.DomainFormat = _appConfiguration["App:WebSiteRootAddress"] ?? "http://localhost:45776/";
+            Configuration.Modules.AbpWebCommon().MultiTenancy.DomainFormat = _appConfiguration["App:WebSiteRootAddress"] ?? "https://localhost:44303/";
             Configuration.Modules.AspNetZero().LicenseCode = _appConfiguration["AbpZeroLicenseCode"];
 
             //Changed AntiForgery token/cookie names to not conflict to the main application while redirections.

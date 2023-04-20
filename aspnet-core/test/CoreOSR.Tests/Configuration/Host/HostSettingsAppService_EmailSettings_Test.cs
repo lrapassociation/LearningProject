@@ -69,18 +69,18 @@ namespace CoreOSR.Tests.Configuration.Host
             await _hostSettingsAppService.UpdateAllSettings(settings);
 
             //Assert
-            _settingManager.GetSettingValue(EmailSettingNames.DefaultFromAddress).ShouldBe("test@mydomain.com"); //not changed
-            _settingManager.GetSettingValue(EmailSettingNames.DefaultFromDisplayName).ShouldBe("My daily mailing service");
-            _settingManager.GetSettingValue(EmailSettingNames.Smtp.Host).ShouldBe("100.101.102.104");
-            _settingManager.GetSettingValue<int>(EmailSettingNames.Smtp.Port).ShouldBe(42);
-            _settingManager.GetSettingValue(EmailSettingNames.Smtp.UserName).ShouldBe("changeduser");
+            (await _settingManager.GetSettingValueAsync(EmailSettingNames.DefaultFromAddress)).ShouldBe("test@mydomain.com"); //not changed
+            (await _settingManager.GetSettingValueAsync(EmailSettingNames.DefaultFromDisplayName)).ShouldBe("My daily mailing service");
+            (await _settingManager.GetSettingValueAsync(EmailSettingNames.Smtp.Host)).ShouldBe("100.101.102.104");
+            (await _settingManager.GetSettingValueAsync<int>(EmailSettingNames.Smtp.Port)).ShouldBe(42);
+            (await _settingManager.GetSettingValueAsync(EmailSettingNames.Smtp.UserName)).ShouldBe("changeduser");
 
-            var smtpPassword = _settingManager.GetSettingValue(EmailSettingNames.Smtp.Password);
+            var smtpPassword = await _settingManager.GetSettingValueAsync(EmailSettingNames.Smtp.Password);
             SimpleStringCipher.Instance.Decrypt(smtpPassword).ShouldBe("654321");
 
-            _settingManager.GetSettingValue(EmailSettingNames.Smtp.Domain).ShouldBe("changeddomain");
-            _settingManager.GetSettingValue<bool>(EmailSettingNames.Smtp.EnableSsl).ShouldBe(false);
-            _settingManager.GetSettingValue<bool>(EmailSettingNames.Smtp.UseDefaultCredentials).ShouldBe(false); //not changed
+            (await _settingManager.GetSettingValueAsync(EmailSettingNames.Smtp.Domain)).ShouldBe("changeddomain");
+            (await _settingManager.GetSettingValueAsync<bool>(EmailSettingNames.Smtp.EnableSsl)).ShouldBe(false);
+            (await _settingManager.GetSettingValueAsync<bool>(EmailSettingNames.Smtp.UseDefaultCredentials)).ShouldBe(false); //not changed
         }
     }
 }

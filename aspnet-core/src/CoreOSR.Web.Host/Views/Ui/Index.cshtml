@@ -1,11 +1,20 @@
-﻿@using CoreOSR.Authorization
+﻿@using Abp.Web.Security.AntiForgery
+@using Microsoft.AspNetCore.Http
+@using CoreOSR.Authorization
 @using CoreOSR.Web.Common
 @model CoreOSR.Web.Models.Ui.HomePageModel
-
+@inject IAbpAntiForgeryManager AbpAntiForgeryManager
+@{
+    AbpAntiForgeryManager.SetCookie(Context, cookieOptions: new CookieOptions()
+    {
+        SameSite = SameSiteMode.Strict,
+        Secure = true
+    });
+}
 <head>
     <title>CoreOSR</title>
 
-    <link href="~/view-resources/Views/Ui/Index.css" rel="stylesheet" />
+    <link href="~/view-resources/Views/Ui/Index.css" rel="stylesheet" asp-append-version="true"/>
 </head>
 <div class="main-content">
     <div class="user-name">@L("YouAreAlreadyLoggedInWithUser") : @Html.Raw(Model.GetShownLoginName())</div>

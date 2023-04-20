@@ -8,6 +8,7 @@ using CoreOSR.Core.Dependency;
 using CoreOSR.Core.Threading;
 using CoreOSR.Localization;
 using CoreOSR.Localization.Resources;
+using CoreOSR.MultiTenancy;
 using CoreOSR.UI;
 
 namespace CoreOSR.ViewModels.Base
@@ -42,6 +43,11 @@ namespace CoreOSR.ViewModels.Base
                 {
                     AppContext.Value.Configuration = result;
                     SetCurrentCulture();
+                    if (!result.MultiTenancy.IsEnabled)
+                    {
+                        AppContext.Value.SetAsTenant(TenantConsts.DefaultTenantName, TenantConsts.DefaultTenantId);
+                    }
+
                     AppContext.Value.CurrentLanguage = result.Localization.CurrentLanguage;
                     WarnIfUserHasNoPermission();
                     if (successCallback != null)

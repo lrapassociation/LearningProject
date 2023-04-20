@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -7,6 +8,7 @@ using Abp.Runtime.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Logging;
@@ -24,13 +26,13 @@ namespace CoreOSR.Web.Startup
             
             if (bool.Parse(configuration["Authentication:JwtBearer:IsEnabled"]))
             {
-                authenticationBuilder.AddJwtBearer(options =>
+                authenticationBuilder.AddAbpAsyncJwtBearer(options =>
                 {
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
                         // The signing key must match!
                         ValidateIssuerSigningKey = true,
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(configuration["Authentication:JwtBearer:SecurityKey"])),
+                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["Authentication:JwtBearer:SecurityKey"])),
 
                         // Validate the JWT Issuer (iss) claim
                         ValidateIssuer = true,
@@ -48,7 +50,7 @@ namespace CoreOSR.Web.Startup
                     };
 
                     options.SecurityTokenValidators.Clear();
-                    options.SecurityTokenValidators.Add(new CoreOSRJwtSecurityTokenHandler());
+                    options.AsyncSecurityTokenValidators.Add(new CoreOSRAsyncJwtSecurityTokenHandler());
 
                     options.Events = new JwtBearerEvents
                     {
@@ -81,18 +83,29 @@ namespace CoreOSR.Web.Startup
 
             if (context.HttpContext.Request.Path.Value.StartsWith("/signalr"))
             {
-                var env = context.HttpContext.RequestServices.GetService<IHostingEnvironment>();
+                var env = context.HttpContext.RequestServices.GetService<IWebHostEnvironment>();
                 var config = env.GetAppConfiguration();
                 var allowAnonymousSignalRConnection = bool.Parse(config["App:AllowAnonymousSignalRConnection"]);
 
                 return SetToken(context, allowAnonymousSignalRConnection);
             }
 
-            if (context.HttpContext.Request.Path.Value.Contains("/Chat/GetUploadedObject"))
+            List<string> urlsUsingEnchAuthToken = new List<string>()
             {
-                return SetToken(context, false);
-            }
+                "/Chat/GetUploadedObject?",
+                "/Profile/GetProfilePictureByUser?"
+            };
 
+            if (urlsUsingEnchAuthToken.Any(url => context.HttpContext.Request.GetDisplayUrl().Contains(url)))
+            {
+                if (context.HttpContext.Request.Headers.ContainsKey("authorization"))
+                {
+                    return Task.CompletedTask;
+                }
+                    
+                return SetToken(context, false);  
+            }
+            
             return Task.CompletedTask;
         }
 

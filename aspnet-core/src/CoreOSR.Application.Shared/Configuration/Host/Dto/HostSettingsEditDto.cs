@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using CoreOSR.Configuration.Dto;
+using CoreOSR.Configuration.Tenants.Dto;
 
 namespace CoreOSR.Configuration.Host.Dto
 {
@@ -23,5 +24,12 @@ namespace CoreOSR.Configuration.Host.Dto
         public HostBillingSettingsEditDto Billing { get; set; }
 
         public OtherSettingsEditDto OtherSettings { get; set; }
+
+        public ExternalLoginProviderSettingsEditDto ExternalLoginProviderSettings { get; set; }
+
+        public HostSettingsEditDto()
+        {
+            ExternalLoginProviderSettings = new ExternalLoginProviderSettingsEditDto();
+        }
     }
 }

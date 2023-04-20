@@ -18,7 +18,7 @@ namespace CoreOSR.MultiTenancy.Payments
         Task<PagedResultDto<SubscriptionPaymentListDto>> GetPaymentHistory(GetPaymentHistoryInput input);
 
         List<PaymentGatewayModel> GetActiveGateways(GetActiveGatewaysInput input);
-        
+
         Task<SubscriptionPaymentDto> GetPaymentAsync(long paymentId);
 
         Task<SubscriptionPaymentDto> GetLastCompletedPayment();
@@ -32,5 +32,11 @@ namespace CoreOSR.MultiTenancy.Payments
         Task ExtendSucceed(long paymentId);
 
         Task PaymentFailed(long paymentId);
+
+        Task SwitchBetweenFreeEditions(int upgradeEditionId);
+
+        Task UpgradeSubscriptionCostsLessThenMinAmount(int editionId);
+
+        Task<bool> HasAnyPayment();
     }
 }

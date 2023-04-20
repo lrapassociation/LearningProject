@@ -1,5 +1,4 @@
-﻿using System;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace CoreOSR.Configuration.Host.Dto
 {
@@ -12,5 +11,7 @@ namespace CoreOSR.Configuration.Host.Dto
 
         [Range(10, int.MaxValue)]
         public int ShowTimeOutNotificationSecond { get; set; }
+
+        public bool ShowLockScreenWhenTimedOut { get; set; }
     }
 }

@@ -11,5 +11,9 @@ namespace CoreOSR.Web.Models.TokenAuth
         public bool WaitingForActivation { get; set; }
 
         public string ReturnUrl { get; set; }
+
+        public string RefreshToken { get; set; }
+
+        public int RefreshTokenExpireInSeconds { get; set; }
     }
 }

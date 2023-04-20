@@ -6,20 +6,15 @@ import { DemoUiComponentsServiceProxy } from '@shared/service-proxies/service-pr
 @Component({
     selector: 'demo-ui-input-mask',
     templateUrl: './demo-ui-input-mask.component.html',
-    animations: [appModuleAnimation()]
+    animations: [appModuleAnimation()],
 })
-
 export class DemoUiInputMaskComponent extends AppComponentBase {
-
     dateValue = '';
     phoneValue = '';
     serialValue = '';
     phoneExtValue = '';
 
-    constructor(
-        injector: Injector,
-        private demoUiComponentsService: DemoUiComponentsServiceProxy
-    ) {
+    constructor(injector: Injector, private demoUiComponentsService: DemoUiComponentsServiceProxy) {
         super(injector);
     }
 
@@ -41,10 +36,8 @@ export class DemoUiInputMaskComponent extends AppComponentBase {
 
     // input mask - post
     submitValue(value: any): void {
-
-        this.demoUiComponentsService.sendAndGetValue(value)
-            .subscribe(data => {
-                this.message.info(data.output, this.l('PostedValue'));
-            });
+        this.demoUiComponentsService.sendAndGetValue(value).subscribe((data) => {
+            this.message.info(data.output, this.l('PostedValue'));
+        });
     }
 }

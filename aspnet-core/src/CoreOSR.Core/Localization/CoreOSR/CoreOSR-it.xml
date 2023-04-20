@@ -173,7 +173,6 @@
     <text name="RequestedFileDoesNotExists">Il file richiesto non esiste!</text>
     <text name="MailSent">Messaggio inviato</text>
     <text name="PasswordResetMailSentMessage">Un link per il reset della password ti è stato inviato. Per favore controlla le tue email.</text>
-    <text name="ActivationMailSentMessage">Un messaggio con il link di attivazione ti è stato inviato al tuo indirizzo email. Per favore controlla le tue email.</text>
     <text name="UseCaptchaOnRegistration">Utilizza l'immagine di sicurezza (captcha) in registrazione.</text>
     <text name="FormBasedRegistration">Registrazione tramite form.</text>
     <text name="LdapSettings">Impostazioni LDAP</text>
@@ -241,7 +240,6 @@
     <text name="Language">Lingua</text>
     <text name="Flag">Bandiera</text>
     <text name="SetAsDefaultLanguage">Imposta come lingua di default</text>
-    <text name="InvlalidLanguageCode">Codice lingua non valido.</text>
     <text name="EditLanguage">Modifica lingua</text>
     <text name="ChangeTexts">Modifica testi.</text>
     <text name="TargetValue">Valore di destinazione</text>
@@ -313,7 +311,7 @@
     <text name="ReceiveNotifications_Definition">Questa opzione serve per abilitare o disabilitare completamente le notifiche.</text>
     <text name="NotificationTypes">Tipi di notifica</text>
     <text name="Notifications">Notifiche</text>
-    <text name="ThereIsNoNotification">Non ci sono notifiche.</text>
+    <text name="ThereAreNoNotifications">Non ci sono notifiche.</text>
     <text name="Unread">Non lette</text>
     <text name="YouCanNotDeleteOwnAccount">Non puoi cancellare il tuo account!</text>
   </texts>

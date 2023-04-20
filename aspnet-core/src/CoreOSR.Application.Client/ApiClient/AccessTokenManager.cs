@@ -3,7 +3,6 @@ using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using Abp.Configuration.Startup;
 using Abp.Dependency;
-using Abp.MultiTenancy;
 using Abp.UI;
 using Abp.Web.Models;
 using Flurl.Http;
@@ -24,12 +23,12 @@ namespace CoreOSR.ApiClient
 
         public DateTime AccessTokenRetrieveTime { get; set; }
 
-        [CanBeNull]
-        public AbpAuthenticateResultModel AuthenticateResult { get; set; }
+        [CanBeNull] public AbpAuthenticateResultModel AuthenticateResult { get; set; }
 
         public bool IsUserLoggedIn => AuthenticateResult?.AccessToken != null;
 
-        public bool IsRefreshTokenExpired => AuthenticateResult == null || DateTime.Now >= AuthenticateResult.RefreshTokenExpireDate;
+        public bool IsRefreshTokenExpired =>
+            AuthenticateResult == null || DateTime.Now >= AuthenticateResult.RefreshTokenExpireDate;
 
         public AccessTokenManager(
             IApplicationContext applicationContext,
@@ -51,6 +50,16 @@ namespace CoreOSR.ApiClient
             return AuthenticateResult.AccessToken;
         }
 
+        public string GetEncryptedAccessToken()
+        {
+            if (AuthenticateResult == null)
+            {
+                throw new ApplicationException("You have to authenticate first!");
+            }
+
+            return AuthenticateResult.EncryptedAccessToken;
+        }
+
         public async Task<AbpAuthenticateResultModel> LoginAsync()
         {
             EnsureUserNameAndPasswordProvided();
@@ -59,7 +68,10 @@ namespace CoreOSR.ApiClient
             {
                 if (_applicationContext.CurrentTenant != null)
                 {
-                    client.WithHeader(_multiTenancyConfig.TenantIdResolveKey, _applicationContext.CurrentTenant.TenantId);
+                    client.WithHeader(
+                        _multiTenancyConfig.TenantIdResolveKey,
+                        _applicationContext.CurrentTenant.TenantId
+                    );
                 }
 
                 var response = await client
@@ -80,18 +92,25 @@ namespace CoreOSR.ApiClient
             }
         }
 
-        public async Task<string> RefreshTokenAsync()
+        public async Task<(string accessToken, string encryptedAccessToken)> RefreshTokenAsync()
         {
-            if (AuthenticateResult == null ||
-                string.IsNullOrWhiteSpace(AuthenticateResult.RefreshToken))
+            if (AuthenticateResult == null || string.IsNullOrWhiteSpace(AuthenticateResult.RefreshToken))
             {
                 throw new ApplicationException("No refresh token!");
             }
 
             using (var client = CreateApiClient())
             {
+                if (_applicationContext.CurrentTenant != null)
+                {
+                    client.WithHeader(
+                        _multiTenancyConfig.TenantIdResolveKey,
+                        _applicationContext.CurrentTenant.TenantId
+                    );
+                }
+                
                 var response = await client.Request(RefreshTokenUrlSegment)
-                    .PostUrlEncodedAsync(new { refreshToken = AuthenticateResult.RefreshToken })
+                    .PostUrlEncodedAsync(new {refreshToken = AuthenticateResult.RefreshToken})
                     .ReceiveJson<AjaxResponse<RefreshTokenResult>>();
 
                 if (!response.Success)
@@ -101,9 +120,11 @@ namespace CoreOSR.ApiClient
                 }
 
                 AuthenticateResult.AccessToken = response.Result.AccessToken;
+                AuthenticateResult.EncryptedAccessToken = response.Result.EncryptedAccessToken;
+
                 AccessTokenRetrieveTime = DateTime.Now;
 
-                return response.Result.AccessToken;
+                return (response.Result.AccessToken, response.Result.EncryptedAccessToken);
             }
         }
 

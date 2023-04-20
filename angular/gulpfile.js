@@ -1,6 +1,6 @@
-﻿var gulp = require("gulp");
+﻿var gulp = require('gulp');
 var path = require('path');
-var merge = require("merge-stream");
+var merge = require('merge-stream');
 var globby = require('globby');
 var concat = require('gulp-concat');
 var less = require('gulp-less');
@@ -17,11 +17,15 @@ function processInputDefinition(input) {
     var result = [];
     for (var i = 0; i < input.length; i++) {
         var url = input[i];
+        var longPath = '';
         if (url.startsWith('!')) {
-            result.push('!' + path.resolve(__dirname, url.substring(1)));
+            longPath = '!' + path.resolve(__dirname, url.substring(1));
         } else {
-            result.push(path.resolve(__dirname, url));
+            longPath = path.resolve(__dirname, url);
         }
+
+        longPath = longPath.replace(/\\/g, '/');
+        result.push(longPath);
     }
 
     return result;
@@ -54,9 +58,7 @@ function getPathWithoutFileNameFromPath(path) {
 function createScriptBundles() {
     var tasks = [];
     for (var script in scriptEntries) {
-        tasks.push(
-            createScriptBundle(script)
-        );
+        tasks.push(createScriptBundle(script));
     }
 
     return tasks;
@@ -69,44 +71,35 @@ function createScriptBundle(script) {
     var stream = gulp.src(scriptEntries[script]);
 
     if (production) {
-        stream = stream
-            .pipe(uglify());
+        stream = stream.pipe(uglify());
     }
 
-    return stream.pipe(concat(bundleName))
-        .pipe(gulp.dest(bundlePath));
+    return stream.pipe(concat(bundleName)).pipe(gulp.dest(bundlePath));
 }
 
 function createStyleBundles() {
     var tasks = [];
     for (var style in styleEntries) {
-        tasks.push(
-            createStyleBundle(style)
-        );
+        tasks.push(createStyleBundle(style));
     }
 
     return tasks;
 }
 
 function createStyleBundle(style) {
-
     var bundleName = getFileNameFromPath(style);
-    var bundlePath = getPathWithoutFileNameFromPath(style);    
+    var bundlePath = getPathWithoutFileNameFromPath(style);
 
-    var stream = gulp.src(styleEntries[style])
-        .pipe(less({ math: 'parens-division' }));
+    var stream = gulp.src(styleEntries[style]).pipe(less({ math: 'parens-division' }));
 
     if (production) {
         stream = stream.pipe(cleanCss());
     }
 
-    return stream
-        .pipe(concat(bundleName))
-        .pipe(gulp.dest(bundlePath));
+    return stream.pipe(concat(bundleName)).pipe(gulp.dest(bundlePath));
 }
 
-function build() {
-
+function build(done) {
     production = true;
 
     fillScriptBundles();
@@ -115,18 +108,23 @@ function build() {
     var scriptTasks = createScriptBundles();
     var styleTasks = createStyleBundles();
 
-    return merge(scriptTasks.concat(styleTasks));
+    var stream = merge(scriptTasks.concat(styleTasks));
+
+    return !stream.isEmpty() ? stream : done();
 }
 
-function buildDev() {
-
+function buildDev(done) {
     fillScriptBundles();
     fillStyleBundles();
 
     var scriptTasks = createScriptBundles();
     var styleTasks = createStyleBundles();
-    console.log("Dynamic bundles are being created.");
-    return merge(scriptTasks.concat(styleTasks));
+
+    console.log('Dynamic bundles are being created.');
+
+    var stream = merge(scriptTasks.concat(styleTasks));
+
+    return !stream.isEmpty() ? stream : done();
 }
 
 exports.build = build;

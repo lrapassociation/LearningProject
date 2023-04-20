@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using Abp.Runtime.Validation;
 using Abp.Timing;
+using CoreOSR.Configuration.Dto;
 using CoreOSR.Configuration.Host.Dto;
 
 namespace CoreOSR.Configuration.Tenants.Dto
@@ -24,6 +25,13 @@ namespace CoreOSR.Configuration.Tenants.Dto
 
         public TenantOtherSettingsEditDto OtherSettings { get; set; }
 
+        public ExternalLoginProviderSettingsEditDto ExternalLoginProviderSettings { get; set; }
+
+        public TenantSettingsEditDto()
+        {
+            ExternalLoginProviderSettings = new ExternalLoginProviderSettingsEditDto();
+        }
+        
         /// <summary>
         /// This validation is done for single-tenant applications.
         /// Because, these settings can only be set by tenant in a single-tenant application.

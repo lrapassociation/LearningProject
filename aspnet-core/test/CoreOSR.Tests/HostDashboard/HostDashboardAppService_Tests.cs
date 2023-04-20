@@ -9,7 +9,6 @@ using CoreOSR.MultiTenancy.Payments;
 using Shouldly;
 using System.Globalization;
 using CoreOSR.EntityFrameworkCore;
-using CoreOSR.Test.Base;
 
 namespace CoreOSR.Tests.HostDashboard
 {
@@ -27,7 +26,6 @@ namespace CoreOSR.Tests.HostDashboard
         [MultiTenantFact]
         public async Task Should_Get_Daily_Income_Statistics_Data_For_Missing_Days()
         {
-            var now = DateTime.Now;
             var utcNow = DateTime.Now.ToUniversalTime();
 
             //Arrange
@@ -52,7 +50,7 @@ namespace CoreOSR.Tests.HostDashboard
                         Amount = 100,
                         DayCount = 365,
                         EditionId = specialEdition.Id,
-                        CreationTime = now.AddDays(-3),
+                        CreationTime = utcNow.AddDays(-3),
                         TenantId = 1
                     });
 
@@ -61,7 +59,7 @@ namespace CoreOSR.Tests.HostDashboard
                         Amount = 200,
                         DayCount = 365,
                         EditionId = specialEdition.Id,
-                        CreationTime = now.AddDays(-3),
+                        CreationTime = utcNow.AddDays(-3),
                         TenantId = 1
                     });
 
@@ -70,22 +68,22 @@ namespace CoreOSR.Tests.HostDashboard
                         Amount = 200,
                         DayCount = 730,
                         EditionId = specialEdition.Id,
-                        CreationTime = now.AddDays(-1),
+                        CreationTime = utcNow.AddDays(-1),
                         TenantId = 1
                     });
 
                     context.Tenants.Add(new Tenant("MyTenant", "My Tenant")
                     {
                         SubscriptionEndDateUtc = utcNow.AddDays(1),
-                        CreationTime = now.AddMinutes(-1)
+                        CreationTime = utcNow.AddMinutes(-1)
                     });
                 });
 
             //Act
-            var output = await _hostDashboardService.GetDashboardStatisticsData(new GetDashboardDataInput
+            var output = await _hostDashboardService.GetIncomeStatistics(new GetIncomeStatisticsDataInput
             {
-                StartDate = now.AddDays(-4),
-                EndDate = now,
+                StartDate = utcNow.AddDays(-4),
+                EndDate = utcNow,
                 IncomeStatisticsDateInterval = ChartDateInterval.Daily
             });
 
@@ -152,21 +150,15 @@ namespace CoreOSR.Tests.HostDashboard
                 });
 
             //Act
-            var output = await _hostDashboardService.GetDashboardStatisticsData(new GetDashboardDataInput
+            var output = await _hostDashboardService.GetIncomeStatistics(new GetIncomeStatisticsDataInput
             {
                 StartDate = now.AddDays(-3),
                 EndDate = now,
                 IncomeStatisticsDateInterval = ChartDateInterval.Daily
             });
 
-            output.NewSubscriptionAmount.ShouldBe(300);
-            output.NewTenantsCount.ShouldBe(2);
             output.IncomeStatistics.Count.ShouldBe(4);
             output.IncomeStatistics.Sum(x => x.Amount).ShouldBe(300);
-            output.EditionStatistics.Count.ShouldBe(1);
-            output.ExpiringTenants.Count.ShouldBe(1);
-            output.ExpiringTenants.First().RemainingDayCount.ShouldBe(1);
-            output.RecentTenants.Count.ShouldBe(2);
         }
 
         [MultiTenantFact]

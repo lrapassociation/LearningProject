@@ -31,6 +31,8 @@ namespace CoreOSR.ViewModels
             ? _applicationContext.CurrentTenant.TenancyName
             : L.Localize("NotSelected");
 
+        public bool IsMultiTenancyEnabled => _applicationContext.Configuration.MultiTenancy.IsEnabled;
+
         private readonly IAccountAppService _accountAppService;
         private readonly IApplicationContext _applicationContext;
         private readonly IDataStorageService _dataStorageService;

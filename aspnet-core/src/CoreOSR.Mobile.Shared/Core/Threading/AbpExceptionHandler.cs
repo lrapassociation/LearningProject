@@ -58,7 +58,7 @@ namespace CoreOSR.Core.Threading
         /// </summary>
         private static bool IsUnauthroizedResponseForSessionTimoutCase(FlurlHttpException httpException, AjaxResponse ajaxResponse)
         {
-            if (httpException.Call.Response.StatusCode != HttpStatusCode.Unauthorized)
+            if (httpException.Call.HttpResponseMessage.StatusCode != HttpStatusCode.Unauthorized)
             {
                 return false;
             }

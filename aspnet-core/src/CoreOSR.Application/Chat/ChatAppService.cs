@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Abp;
 using Abp.Application.Services.Dto;
 using Abp.Auditing;
+using Abp.Authorization;
 using Abp.Linq.Extensions;
 using Abp.RealTime;
 using Abp.Runtime.Session;
@@ -16,6 +17,7 @@ using CoreOSR.Friendships.Dto;
 
 namespace CoreOSR.Chat
 {
+    [AbpAuthorize]
     public class ChatAppService : CoreOSRAppServiceBase, IChatAppService
     {
         private readonly IRepository<ChatMessage, long> _chatMessageRepository;

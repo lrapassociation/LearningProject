@@ -1,7 +1,10 @@
 ﻿using System;
+using System.IO;
 using System.Net;
 using System.Threading.Tasks;
 using Abp.Auditing;
+using Abp.Extensions;
+using Abp.MimeTypes;
 using Microsoft.AspNetCore.Mvc;
 using CoreOSR.Dto;
 using CoreOSR.Storage;
@@ -12,14 +15,17 @@ namespace CoreOSR.Web.Controllers
     {
         private readonly ITempFileCacheManager _tempFileCacheManager;
         private readonly IBinaryObjectManager _binaryObjectManager;
+        private readonly IMimeTypeMap _mimeTypeMap;
 
         public FileController(
             ITempFileCacheManager tempFileCacheManager,
-            IBinaryObjectManager binaryObjectManager
+            IBinaryObjectManager binaryObjectManager,
+            IMimeTypeMap mimeTypeMap
         )
         {
             _tempFileCacheManager = tempFileCacheManager;
             _binaryObjectManager = binaryObjectManager;
+            _mimeTypeMap = mimeTypeMap;
         }
 
         [DisableAuditing]
@@ -40,7 +46,32 @@ namespace CoreOSR.Web.Controllers
             var fileObject = await _binaryObjectManager.GetOrNullAsync(id);
             if (fileObject == null)
             {
-                return StatusCode((int)HttpStatusCode.NotFound);
+                return StatusCode((int) HttpStatusCode.NotFound);
+            }
+
+            if (fileName.IsNullOrEmpty())
+            {
+                if (!fileObject.Description.IsNullOrEmpty() &&
+                    !Path.GetExtension(fileObject.Description).IsNullOrEmpty())
+                {
+                    fileName = fileObject.Description;
+                }
+                else
+                {
+                    return StatusCode((int) HttpStatusCode.BadRequest);
+                }
+            }
+
+            if (contentType.IsNullOrEmpty())
+            {
+                if (!Path.GetExtension(fileName).IsNullOrEmpty())
+                {
+                    contentType = _mimeTypeMap.GetMimeType(fileName);
+                }
+                else
+                {
+                    return StatusCode((int) HttpStatusCode.BadRequest);
+                }
             }
 
             return File(fileObject.Bytes, contentType, fileName);

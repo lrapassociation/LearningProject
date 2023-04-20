@@ -3,11 +3,11 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <AssetTargetFallback>$(AssetTargetFallback);portable-net45+win8+wp8+wpa81;</AssetTargetFallback>
     <RootNamespace>CoreOSR</RootNamespace>
+    <GenerateDocumentationFile>False</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Flurl" Version="2.8.2" />
-    <PackageReference Include="Flurl.Http" Version="2.4.2" />
-    <PackageReference Include="modernhttpclient" Version="2.4.2" />
+    <PackageReference Include="Flurl" Version="3.0.6" />
+    <PackageReference Include="Flurl.Http" Version="3.2.4" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\CoreOSR.Application.Shared\CoreOSR.Application.Shared.csproj" />

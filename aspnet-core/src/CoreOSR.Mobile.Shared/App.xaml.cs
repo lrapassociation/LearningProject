@@ -27,11 +27,10 @@ namespace CoreOSR
             await DependencyResolver.Resolve<IAccountService>().LogoutAsync();
         }
 
-        public static async Task OnAccessTokenRefresh(string newAccessToken)
+        public static async Task OnAccessTokenRefresh(string newAccessToken, string newEncryptedAccessToken)
         {
             await DependencyResolver.Resolve<IDataStorageService>().StoreAccessTokenAsync(newAccessToken);
         }
-
 
         public static void LoadPersistedSession()
         {

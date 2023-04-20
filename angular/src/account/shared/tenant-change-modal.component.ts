@@ -1,17 +1,21 @@
 import { Component, ElementRef, Injector, ViewChild } from '@angular/core';
 import { AppComponentBase } from '@shared/common/app-component-base';
-import { AccountServiceProxy, IsTenantAvailableInput, IsTenantAvailableOutput, TenantAvailabilityState } from '@shared/service-proxies/service-proxies';
-import { ModalDirective } from 'ngx-bootstrap';
+import {
+    AccountServiceProxy,
+    IsTenantAvailableInput,
+    IsTenantAvailableOutput,
+    TenantAvailabilityState,
+} from '@shared/service-proxies/service-proxies';
+import { ModalDirective } from 'ngx-bootstrap/modal';
 import { finalize } from 'rxjs/operators';
 
 @Component({
     selector: 'tenantChangeModal',
-    templateUrl: './tenant-change-modal.component.html'
+    templateUrl: './tenant-change-modal.component.html',
 })
 export class TenantChangeModalComponent extends AppComponentBase {
-
-    @ViewChild('tenantChangeModal', {static: true}) modal: ModalDirective;
-    @ViewChild('tenancyNameInput', {static: true}) tenancyNameInput: ElementRef;
+    @ViewChild('tenantChangeModal', { static: true }) modal: ModalDirective;
+    @ViewChild('tenancyNameInput', { static: true }) tenancyNameInput: ElementRef;
 
     tenancyName = '';
     tenancyNameBuffer = '';
@@ -20,10 +24,7 @@ export class TenantChangeModalComponent extends AppComponentBase {
     active = false;
     saving = false;
 
-    constructor(
-        private _accountService: AccountServiceProxy,
-        injector: Injector
-    ) {
+    constructor(private _accountService: AccountServiceProxy, injector: Injector) {
         super(injector);
     }
 
@@ -66,7 +67,6 @@ export class TenantChangeModalComponent extends AppComponentBase {
     }
 
     save(): void {
-
         if (!this.tenancyName) {
             abp.multiTenancy.setTenantIdCookie(undefined);
             this.close();
@@ -78,8 +78,13 @@ export class TenantChangeModalComponent extends AppComponentBase {
         input.tenancyName = this.tenancyName;
 
         this.saving = true;
-        this._accountService.isTenantAvailable(input)
-            .pipe(finalize(() => { this.saving = false; }))
+        this._accountService
+            .isTenantAvailable(input)
+            .pipe(
+                finalize(() => {
+                    this.saving = false;
+                })
+            )
             .subscribe((result: IsTenantAvailableOutput) => {
                 switch (result.state) {
                     case TenantAvailabilityState.Available:

@@ -1,5 +1,7 @@
 ﻿using System;
 using Abp.AspNetCore;
+using Abp.AspNetCore.Configuration;
+using Abp.AspNetCore.Mvc.Extensions;
 using Abp.AspNetCore.SignalR.Hubs;
 using Abp.Castle.Logging.Log4Net;
 using Castle.Facilities.Logging;
@@ -9,51 +11,47 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using CoreOSR.Configuration;
 using CoreOSR.Identity;
-using CoreOSR.Web.Common;
 using CoreOSR.Web.HealthCheck;
-
 
 namespace CoreOSR.Web.Public.Startup
 {
     public class Startup
     {
+        private readonly IWebHostEnvironment _hostingEnvironment;
         private readonly IConfigurationRoot _appConfiguration;
 
-        public Startup(IHostingEnvironment env)
+        public Startup(IWebHostEnvironment env)
         {
+            _hostingEnvironment = env;
             _appConfiguration = env.GetAppConfiguration();
         }
 
         public IServiceProvider ConfigureServices(IServiceCollection services)
         {
             //MVC
-            services.AddMvc(options =>
+            services.AddControllersWithViews(options =>
             {
                 options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
-            }).SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
+            }).AddNewtonsoftJson();
+
+            if (bool.Parse(_appConfiguration["KestrelServer:IsEnabled"]))
+            {
+                ConfigureKestrel(services);
+            }
 
             IdentityRegistrar.Register(services);
             services.AddSignalR();
 
             if (bool.Parse(_appConfiguration["HealthChecks:HealthChecksEnabled"]))
             {
-                services.AddAbpZeroHealthCheck();
-
-                var healthCheckUISection = _appConfiguration.GetSection("HealthChecks")?.GetSection("HealthChecksUI");
-
-                if (bool.Parse(healthCheckUISection["HealthChecksUIEnabled"]))
-                {
-                    services.Configure<Settings>(settings =>
-                    {
-                        healthCheckUISection.Bind(settings, c => c.BindNonPublicProperties = true);
-                    });
-                    services.AddHealthChecksUI();
-                }
+                ConfigureHealthChecks(services);
             }
 
             //Configure Abp and Dependency Injection
@@ -61,12 +59,14 @@ namespace CoreOSR.Web.Public.Startup
             {
                 //Configure Log4Net logging
                 options.IocManager.IocContainer.AddFacility<LoggingFacility>(
-                    f => f.UseAbpLog4Net().WithConfig("log4net.config")
+                    f => f.UseAbpLog4Net().WithConfig(_hostingEnvironment.IsDevelopment()
+                        ? "log4net.config"
+                        : "log4net.Production.config")
                 );
             });
         }
 
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, ILoggerFactory loggerFactory)
         {
             app.UseAbp(); //Initializes ABP framework.
 
@@ -80,29 +80,25 @@ namespace CoreOSR.Web.Public.Startup
                 app.UseExceptionHandler("/Error");
             }
 
-            AuthConfigurer.Configure(app, _appConfiguration);
-
             app.UseStaticFiles();
+            app.UseRouting();
 
-            app.UseSignalR(routes =>
+            app.UseAuthentication();
+            app.UseAuthorization();
+
+            app.UseEndpoints(endpoints =>
             {
-                routes.MapHub<AbpCommonHub>("/signalr");
-            });
+                endpoints.MapHub<AbpCommonHub>("/signalr");
 
-            app.UseMvc(routes =>
-            {
-                routes.MapRoute(
-                    name: "defaultWithArea",
-                    template: "{area}/{controller=Home}/{action=Index}/{id?}");
-
-                routes.MapRoute(
-                    name: "default",
-                    template: "{controller=Home}/{action=Index}/{id?}");
+                endpoints.MapControllerRoute("defaultWithArea", "{area}/{controller=Home}/{action=Index}/{id?}");
+                endpoints.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
+                
+                app.ApplicationServices.GetRequiredService<IAbpAspNetCoreConfiguration>().EndpointConfiguration.ConfigureAllEndpoints(endpoints);
             });
 
             if (bool.Parse(_appConfiguration["HealthChecks:HealthChecksEnabled"]))
             {
-                app.UseHealthChecks("/healthz", new HealthCheckOptions()
+                app.UseHealthChecks("/health", new HealthCheckOptions()
                 {
                     Predicate = _ => true,
                     ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
@@ -112,6 +108,41 @@ namespace CoreOSR.Web.Public.Startup
                 {
                     app.UseHealthChecksUI();
                 }
+            }
+        }
+
+        private void ConfigureKestrel(IServiceCollection services)
+        {
+            services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions>(options =>
+            {
+                options.Listen(new System.Net.IPEndPoint(System.Net.IPAddress.Any, 443),
+                    listenOptions =>
+                    {
+                        var certPassword = _appConfiguration.GetValue<string>("Kestrel:Certificates:Default:Password");
+                        var certPath = _appConfiguration.GetValue<string>("Kestrel:Certificates:Default:Path");
+                        var cert = new System.Security.Cryptography.X509Certificates.X509Certificate2(certPath, certPassword);
+                        listenOptions.UseHttps(new HttpsConnectionAdapterOptions()
+                        {
+                            ServerCertificate = cert
+                        });
+                    });
+            });
+        }
+
+        private void ConfigureHealthChecks(IServiceCollection services)
+        {
+            services.AddAbpZeroHealthCheck();
+
+            var healthCheckUISection = _appConfiguration.GetSection("HealthChecks")?.GetSection("HealthChecksUI");
+
+            if (bool.Parse(healthCheckUISection["HealthChecksUIEnabled"]))
+            {
+                services.Configure<Settings>(settings =>
+                {
+                    healthCheckUISection.Bind(settings, c => c.BindNonPublicProperties = true);
+                });
+                services.AddHealthChecksUI()
+                    .AddInMemoryStorage();
             }
         }
     }

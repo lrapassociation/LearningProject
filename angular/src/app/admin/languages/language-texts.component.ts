@@ -3,28 +3,27 @@ import { ActivatedRoute, Params, Router } from '@angular/router';
 import { appModuleAnimation } from '@shared/animations/routerTransition';
 import { AppComponentBase } from '@shared/common/app-component-base';
 import { LanguageServiceProxy } from '@shared/service-proxies/service-proxies';
-import * as _ from 'lodash';
-import { LazyLoadEvent } from 'primeng/components/common/lazyloadevent';
-import { Paginator } from 'primeng/components/paginator/paginator';
-import { Table } from 'primeng/components/table/table';
+import { map as _map, filter as _filter } from 'lodash-es';
+import { LazyLoadEvent } from 'primeng/api';
+import { Paginator } from 'primeng/paginator';
+import { Table } from 'primeng/table';
 import { EditTextModalComponent } from './edit-text-modal.component';
 import { finalize } from 'rxjs/operators';
 
 @Component({
     templateUrl: './language-texts.component.html',
     styleUrls: ['./language-texts.component.less'],
-    animations: [appModuleAnimation()]
+    animations: [appModuleAnimation()],
 })
-export class LanguageTextsComponent extends AppComponentBase implements AfterViewInit, OnInit {
-
-    @ViewChild('targetLanguageNameCombobox', {static: true}) targetLanguageNameCombobox: ElementRef;
-    @ViewChild('baseLanguageNameCombobox', {static: true}) baseLanguageNameCombobox: ElementRef;
-    @ViewChild('sourceNameCombobox', {static: true}) sourceNameCombobox: ElementRef;
-    @ViewChild('targetValueFilterCombobox', {static: true}) targetValueFilterCombobox: ElementRef;
-    @ViewChild('textsTable', {static: true}) textsTable: ElementRef;
-    @ViewChild('editTextModal', {static: true}) editTextModal: EditTextModalComponent;
-    @ViewChild('dataTable', {static: true}) dataTable: Table;
-    @ViewChild('paginator', {static: true}) paginator: Paginator;
+export class LanguageTextsComponent extends AppComponentBase implements OnInit {
+    @ViewChild('targetLanguageNameCombobox', { static: true }) targetLanguageNameCombobox: ElementRef;
+    @ViewChild('baseLanguageNameCombobox', { static: true }) baseLanguageNameCombobox: ElementRef;
+    @ViewChild('sourceNameCombobox', { static: true }) sourceNameCombobox: ElementRef;
+    @ViewChild('targetValueFilterCombobox', { static: true }) targetValueFilterCombobox: ElementRef;
+    @ViewChild('textsTable', { static: true }) textsTable: ElementRef;
+    @ViewChild('editTextModal', { static: true }) editTextModal: EditTextModalComponent;
+    @ViewChild('dataTable', { static: true }) dataTable: Table;
+    @ViewChild('paginator', { static: true }) paginator: Paginator;
 
     sourceNames: string[] = [];
     languages: abp.localization.ILanguageInfo[] = [];
@@ -44,14 +43,12 @@ export class LanguageTextsComponent extends AppComponentBase implements AfterVie
     }
 
     ngOnInit(): void {
-        this.sourceNames = _.map(_.filter(abp.localization.sources, source => source.type === 'MultiTenantLocalizationSource'), value => value.name);
+        this.sourceNames = _map(
+            _filter(abp.localization.sources, (source) => source.type === 'MultiTenantLocalizationSource'),
+            (value) => value.name
+        );
         this.languages = abp.localization.languages;
-    }
-
-    ngAfterViewInit(): void {
-        setTimeout(() => {
-            this.init();
-        });
+        this.init();
     }
 
     getLanguageTexts(event?: LazyLoadEvent) {
@@ -61,20 +58,23 @@ export class LanguageTextsComponent extends AppComponentBase implements AfterVie
 
         this.primengTableHelper.showLoadingIndicator();
 
-        this._languageService.getLanguageTexts(
-            this.primengTableHelper.getMaxResultCount(this.paginator, event),
-            this.primengTableHelper.getSkipCount(this.paginator, event),
-            this.primengTableHelper.getSorting(this.dataTable),
-            this.sourceName,
-            this.baseLanguageName,
-            this.targetLanguageName,
-            this.targetValueFilter,
-            this.filterText
-        ).pipe(finalize(() => this.primengTableHelper.hideLoadingIndicator())).subscribe(result => {
-            this.primengTableHelper.totalRecordsCount = result.totalCount;
-            this.primengTableHelper.records = result.items;
-            this.primengTableHelper.hideLoadingIndicator();
-        });
+        this._languageService
+            .getLanguageTexts(
+                this.primengTableHelper.getMaxResultCount(this.paginator, event),
+                this.primengTableHelper.getSkipCount(this.paginator, event),
+                this.primengTableHelper.getSorting(this.dataTable),
+                this.sourceName,
+                this.baseLanguageName,
+                this.targetLanguageName,
+                this.targetValueFilter,
+                this.filterText
+            )
+            .pipe(finalize(() => this.primengTableHelper.hideLoadingIndicator()))
+            .subscribe((result) => {
+                this.primengTableHelper.totalRecordsCount = result.totalCount;
+                this.primengTableHelper.records = result.items;
+                this.primengTableHelper.hideLoadingIndicator();
+            });
     }
 
     init(): void {
@@ -93,19 +93,20 @@ export class LanguageTextsComponent extends AppComponentBase implements AfterVie
         this.paginator.changePage(this.paginator.getPage());
     }
 
-    applyFilters(): void {
-        this._router.navigate(['app/admin/languages', this.targetLanguageName, 'texts', {
-            sourceName: this.sourceName,
-            baseLanguageName: this.baseLanguageName,
-            targetValueFilter: this.targetValueFilter,
-            filterText: this.filterText
-        }]);
+    applyFilters(event?: LazyLoadEvent): void {
+        this._router.navigate([
+            'app/admin/languages',
+            this.targetLanguageName,
+            'texts',
+            {
+                sourceName: this.sourceName,
+                baseLanguageName: this.baseLanguageName,
+                targetValueFilter: this.targetValueFilter,
+                filterText: this.filterText,
+            },
+        ]);
 
-        if (this.paginator.getPage() !== 0) {
-            this.paginator.changePage(0);
-
-            return;
-        }
+        this.paginator.changePage(0);
     }
 
     truncateString(text): string {

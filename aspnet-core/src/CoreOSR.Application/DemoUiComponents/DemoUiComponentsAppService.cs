@@ -12,29 +12,40 @@ namespace CoreOSR.DemoUiComponents
     public class DemoUiComponentsAppService : CoreOSRAppServiceBase, IDemoUiComponentsAppService
     {
         #region date & time pickers
-        public DateToStringOutput SendAndGetDate(DateTime? date)
+        public DateFieldOutput SendAndGetDate(DateTime date)
         {
-            return new DateToStringOutput
+            return new DateFieldOutput
             {
-                DateString = date?.ToString("d")
+                Date = date
             };
         }
 
-        public DateToStringOutput SendAndGetDateTime(DateTime? date)
+        public DateFieldOutput SendAndGetDateTime(DateTime date)
         {
-            return new DateToStringOutput
+            return new DateFieldOutput
             {
-                DateString = date?.ToString("g")
+                Date = date
             };
         }
 
-        public DateToStringOutput SendAndGetDateRange(DateTime? startDate, DateTime? endDate)
+        public DateRangeFieldOutput SendAndGetDateRange(DateTime startDate, DateTime endDate)
         {
-            return new DateToStringOutput
+            return new DateRangeFieldOutput
             {
-                DateString = startDate?.ToString("d") + " - " + endDate?.ToString("d")
+                StartDate = startDate,
+                EndDate = endDate
             };
         }
+
+        public DateWithTextFieldOutput SendAndGetDateWithText(SendAndGetDateWithTextInput input)
+        {
+            return new DateWithTextFieldOutput
+            {
+                Date = input.Date,
+                Text = input.Text
+            };
+        }
+
         #endregion
 
         public List<NameValue<string>> GetCountries(string searchTerm)

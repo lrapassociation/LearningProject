@@ -1,6 +1,4 @@
 using System;
-using System.Drawing;
-using System.IO;
 using System.Threading.Tasks;
 using Abp;
 using Abp.Auditing;
@@ -19,9 +17,9 @@ using CoreOSR.Authentication.TwoFactor.Google;
 using CoreOSR.Authorization.Users.Dto;
 using CoreOSR.Authorization.Users.Profile.Cache;
 using CoreOSR.Authorization.Users.Profile.Dto;
+using CoreOSR.Configuration;
 using CoreOSR.Friendships;
 using CoreOSR.Gdpr;
-using CoreOSR.Identity;
 using CoreOSR.Net.Sms;
 using CoreOSR.Security;
 using CoreOSR.Storage;
@@ -32,7 +30,7 @@ namespace CoreOSR.Authorization.Users.Profile
     [AbpAuthorize]
     public class ProfileAppService : CoreOSRAppServiceBase, IProfileAppService
     {
-        private const int MaxProfilPictureBytes = 5242880; //5MB
+        private const int MaxProfilePictureBytes = 5242880; //5MB
         private readonly IBinaryObjectManager _binaryObjectManager;
         private readonly ITimeZoneService _timeZoneService;
         private readonly IFriendshipManager _friendshipManager;
@@ -41,9 +39,9 @@ namespace CoreOSR.Authorization.Users.Profile
         private readonly ICacheManager _cacheManager;
         private readonly ITempFileCacheManager _tempFileCacheManager;
         private readonly IBackgroundJobManager _backgroundJobManager;
+        private readonly ProfileImageServiceFactory _profileImageServiceFactory;
 
         public ProfileAppService(
-            IAppFolders appFolders,
             IBinaryObjectManager binaryObjectManager,
             ITimeZoneService timezoneService,
             IFriendshipManager friendshipManager,
@@ -51,7 +49,8 @@ namespace CoreOSR.Authorization.Users.Profile
             ISmsSender smsSender,
             ICacheManager cacheManager,
             ITempFileCacheManager tempFileCacheManager,
-            IBackgroundJobManager backgroundJobManager)
+            IBackgroundJobManager backgroundJobManager,
+            ProfileImageServiceFactory profileImageServiceFactory)
         {
             _binaryObjectManager = binaryObjectManager;
             _timeZoneService = timezoneService;
@@ -61,6 +60,7 @@ namespace CoreOSR.Authorization.Users.Profile
             _cacheManager = cacheManager;
             _tempFileCacheManager = tempFileCacheManager;
             _backgroundJobManager = backgroundJobManager;
+            _profileImageServiceFactory = profileImageServiceFactory;
         }
 
         [DisableAuditing]
@@ -75,36 +75,99 @@ namespace CoreOSR.Authorization.Users.Profile
                 : "";
             userProfileEditDto.IsGoogleAuthenticatorEnabled = user.GoogleAuthenticatorKey != null;
 
-            if (Clock.SupportsMultipleTimezone)
+            if (!Clock.SupportsMultipleTimezone)
             {
-                userProfileEditDto.Timezone = await SettingManager.GetSettingValueAsync(TimingSettingNames.TimeZone);
+                return userProfileEditDto;
+            }
 
-                var defaultTimeZoneId = await _timeZoneService.GetDefaultTimezoneAsync(SettingScopes.User, AbpSession.TenantId);
-                if (userProfileEditDto.Timezone == defaultTimeZoneId)
-                {
-                    userProfileEditDto.Timezone = string.Empty;
-                }
+            userProfileEditDto.Timezone = await SettingManager.GetSettingValueAsync(TimingSettingNames.TimeZone);
+
+            var defaultTimeZoneId = await _timeZoneService.GetDefaultTimezoneAsync(
+                SettingScopes.User,
+                AbpSession.TenantId
+            );
+            
+            if (userProfileEditDto.Timezone == defaultTimeZoneId)
+            {
+                userProfileEditDto.Timezone = string.Empty;
             }
 
             return userProfileEditDto;
         }
 
-        public async Task DisableGoogleAuthenticator()
+        public async Task DisableGoogleAuthenticator(VerifyAuthenticatorCodeInput input)
         {
+            var result = await VerifyAuthenticatorCode(input);
+
+            if (!result)
+            {
+                throw new UserFriendlyException(L("InvalidVerificationCode"));
+            }
+
             var user = await GetCurrentUserAsync();
+
             user.GoogleAuthenticatorKey = null;
+            user.RecoveryCode = null;
         }
-        
-        public async Task<UpdateGoogleAuthenticatorKeyOutput> UpdateGoogleAuthenticatorKey()
+
+        public async Task<UpdateGoogleAuthenticatorKeyOutput> ViewRecoveryCodes(VerifyAuthenticatorCodeInput input)
+        {
+            var verified = await VerifyAuthenticatorCodeInternal(input);
+
+            if (!verified)
+            {
+                throw new UserFriendlyException(L("InvalidVerificationCode"));
+            }
+
+            var user = await GetCurrentUserAsync();
+
+            var mergedCodes = user.RecoveryCode ?? "";
+            var splitCodes = mergedCodes.Split(';');
+
+            return new UpdateGoogleAuthenticatorKeyOutput
+            {
+                RecoveryCodes = splitCodes
+            };
+        }
+
+        public async Task<GenerateGoogleAuthenticatorKeyOutput> GenerateGoogleAuthenticatorKey()
         {
             var user = await GetCurrentUserAsync();
-            user.GoogleAuthenticatorKey = Guid.NewGuid().ToString().Replace("-", "").Substring(0, 10);
+            var googleAuthenticatorKey = Guid.NewGuid().ToString().Replace("-", "").Substring(0, 10);
+
+            return new GenerateGoogleAuthenticatorKeyOutput
+            {
+                GoogleAuthenticatorKey = googleAuthenticatorKey,
+                QrCodeSetupImageUrl = _googleTwoFactorAuthenticateService.GenerateSetupCode(
+                    "CoreOSR",
+                    user.EmailAddress, googleAuthenticatorKey, 195, 195).QrCodeSetupImageUrl
+            };
+        }
+
+        public async Task<UpdateGoogleAuthenticatorKeyOutput> UpdateGoogleAuthenticatorKey(
+            UpdateGoogleAuthenticatorKeyInput input)
+        {
+            var verified = await VerifyAuthenticatorCodeInternal(new VerifyAuthenticatorCodeInput
+            {
+                Code = input.AuthenticatorCode,
+                GoogleAuthenticatorKey = input.GoogleAuthenticatorKey
+            });
+
+            if (!verified)
+            {
+                throw new UserFriendlyException(L("InvalidVerificationCode"));
+            }
+
+            var user = await GetCurrentUserAsync();
+            user.GoogleAuthenticatorKey = input.GoogleAuthenticatorKey;
+
+            var recoveryCodes = await UserManager.GenerateNewTwoFactorRecoveryCodesAsync(user, 10);
+
             CheckErrors(await UserManager.UpdateAsync(user));
 
             return new UpdateGoogleAuthenticatorKeyOutput
             {
-                QrCodeSetupImageUrl = _googleTwoFactorAuthenticateService.GenerateSetupCode("CoreOSR",
-                    user.EmailAddress, user.GoogleAuthenticatorKey, 300, 300).QrCodeSetupImageUrl
+                RecoveryCodes = recoveryCodes
             };
         }
 
@@ -112,9 +175,12 @@ namespace CoreOSR.Authorization.Users.Profile
         {
             var code = RandomHelper.GetRandom(100000, 999999).ToString();
             var cacheKey = AbpSession.ToUserIdentifier().ToString();
-            var cacheItem = new SmsVerificationCodeCacheItem { Code = code };
+            var cacheItem = new SmsVerificationCodeCacheItem
+            {
+                Code = code
+            };
 
-            _cacheManager.GetSmsVerificationCodeCache().Set(
+            await _cacheManager.GetSmsVerificationCodeCache().SetAsync(
                 cacheKey,
                 cacheItem
             );
@@ -145,7 +211,9 @@ namespace CoreOSR.Authorization.Users.Profile
 
         public async Task PrepareCollectedData()
         {
-            await _backgroundJobManager.EnqueueAsync<UserCollectedDataPrepareJob, UserIdentifier>(AbpSession.ToUserIdentifier());
+            await _backgroundJobManager.EnqueueAsync<UserCollectedDataPrepareJob, UserIdentifier>(
+                AbpSession.ToUserIdentifier()
+            );
         }
 
         public async Task UpdateCurrentUserProfile(CurrentUserProfileEditDto input)
@@ -168,12 +236,15 @@ namespace CoreOSR.Authorization.Users.Profile
             {
                 if (input.Timezone.IsNullOrEmpty())
                 {
-                    var defaultValue = await _timeZoneService.GetDefaultTimezoneAsync(SettingScopes.User, AbpSession.TenantId);
-                    await SettingManager.ChangeSettingForUserAsync(AbpSession.ToUserIdentifier(), TimingSettingNames.TimeZone, defaultValue);
+                    var defaultValue =
+                        await _timeZoneService.GetDefaultTimezoneAsync(SettingScopes.User, AbpSession.TenantId);
+                    await SettingManager.ChangeSettingForUserAsync(AbpSession.ToUserIdentifier(),
+                        TimingSettingNames.TimeZone, defaultValue);
                 }
                 else
                 {
-                    await SettingManager.ChangeSettingForUserAsync(AbpSession.ToUserIdentifier(), TimingSettingNames.TimeZone, input.Timezone);
+                    await SettingManager.ChangeSettingForUserAsync(AbpSession.ToUserIdentifier(),
+                        TimingSettingNames.TimeZone, input.Timezone);
                 }
             }
         }
@@ -198,6 +269,83 @@ namespace CoreOSR.Authorization.Users.Profile
 
         public async Task UpdateProfilePicture(UpdateProfilePictureInput input)
         {
+            var userId = AbpSession.GetUserId();
+            if (input.UserId.HasValue && input.UserId.Value != userId)
+            {
+                await CheckUpdateUsersProfilePicturePermission();
+                userId = input.UserId.Value;
+            }
+
+            await UpdateProfilePictureForUser(userId, input);
+        }
+
+        public async Task<bool> VerifyAuthenticatorCode(VerifyAuthenticatorCodeInput input)
+        {
+            var result = await VerifyAuthenticatorCodeInternal(input);
+            return result;
+        }
+
+        private async Task<bool> VerifyAuthenticatorCodeInternal(VerifyAuthenticatorCodeInput input)
+        {
+            var user = await GetCurrentUserAsync();
+
+            var isValid = _googleTwoFactorAuthenticateService.ValidateTwoFactorPin(
+                user.GoogleAuthenticatorKey ?? input.GoogleAuthenticatorKey,
+                input.Code
+            );
+
+            if (isValid)
+            {
+                return true;
+            }
+
+            isValid = (await UserManager.RedeemTwoFactorRecoveryCodeAsync(user, input.Code)).Succeeded;
+
+            return isValid;
+        }
+
+        private async Task CheckUpdateUsersProfilePicturePermission()
+        {
+            var permissionToChangeAnotherUsersProfilePicture = await PermissionChecker.IsGrantedAsync(
+                AppPermissions.Pages_Administration_Users_ChangeProfilePicture
+            );
+
+            if (!permissionToChangeAnotherUsersProfilePicture)
+            {
+                var localizedPermissionName = L("UpdateUsersProfilePicture");
+                throw new AbpAuthorizationException(
+                    string.Format(
+                        L("AllOfThesePermissionsMustBeGranted"),
+                        localizedPermissionName
+                    )
+                );
+            }
+        }
+
+        private async Task UpdateProfilePictureForUser(long userId, UpdateProfilePictureInput input)
+        {
+            var userIdentifier = new UserIdentifier(AbpSession.TenantId, userId);
+            var allowToUseGravatar = await SettingManager.GetSettingValueForUserAsync<bool>(
+                AppSettings.UserManagement.AllowUsingGravatarProfilePicture,
+                user: userIdentifier
+            );
+
+            if (!allowToUseGravatar)
+            {
+                input.UseGravatarProfilePicture = false;
+            }
+
+            await SettingManager.ChangeSettingForUserAsync(
+                userIdentifier,
+                AppSettings.UserManagement.UseGravatarProfilePicture,
+                input.UseGravatarProfilePicture.ToString().ToLowerInvariant()
+            );
+
+            if (input.UseGravatarProfilePicture)
+            {
+                return;
+            }
+
             byte[] byteArray;
 
             var imageBytes = _tempFileCacheManager.GetFile(input.FileToken);
@@ -207,47 +355,49 @@ namespace CoreOSR.Authorization.Users.Profile
                 throw new UserFriendlyException("There is no such image file with the token: " + input.FileToken);
             }
 
-            using (var bmpImage = new Bitmap(new MemoryStream(imageBytes)))
-            {
-                var width = (input.Width == 0 || input.Width > bmpImage.Width) ? bmpImage.Width : input.Width;
-                var height = (input.Height == 0 || input.Height > bmpImage.Height) ? bmpImage.Height : input.Height;
-                var bmCrop = bmpImage.Clone(new Rectangle(input.X, input.Y, width, height), bmpImage.PixelFormat);
+            byteArray = imageBytes;
 
-                using (var stream = new MemoryStream())
-                {
-                    bmCrop.Save(stream, bmpImage.RawFormat);
-                    byteArray = stream.ToArray();
-                }
+            if (byteArray.Length > MaxProfilePictureBytes)
+            {
+                throw new UserFriendlyException(L("ResizedProfilePicture_Warn_SizeLimit",
+                    AppConsts.ResizedMaxProfilePictureBytesUserFriendlyValue));
             }
 
-            if (byteArray.Length > MaxProfilPictureBytes)
-            {
-                throw new UserFriendlyException(L("ResizedProfilePicture_Warn_SizeLimit", AppConsts.ResizedMaxProfilPictureBytesUserFriendlyValue));
-            }
-
-            var user = await UserManager.GetUserByIdAsync(AbpSession.GetUserId());
+            var user = await UserManager.GetUserByIdAsync(userIdentifier.UserId);
 
             if (user.ProfilePictureId.HasValue)
             {
                 await _binaryObjectManager.DeleteAsync(user.ProfilePictureId.Value);
             }
 
-            var storedFile = new BinaryObject(AbpSession.TenantId, byteArray);
+            var storedFile = new BinaryObject(userIdentifier.TenantId, byteArray,
+                $"Profile picture of user {userIdentifier.UserId}. {DateTime.UtcNow}");
             await _binaryObjectManager.SaveAsync(storedFile);
 
             user.ProfilePictureId = storedFile.Id;
         }
+
 
         [AbpAllowAnonymous]
         public async Task<GetPasswordComplexitySettingOutput> GetPasswordComplexitySetting()
         {
             var passwordComplexitySetting = new PasswordComplexitySetting
             {
-                RequireDigit = await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement.PasswordComplexity.RequireDigit),
-                RequireLowercase = await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement.PasswordComplexity.RequireLowercase),
-                RequireNonAlphanumeric = await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement.PasswordComplexity.RequireNonAlphanumeric),
-                RequireUppercase = await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement.PasswordComplexity.RequireUppercase),
-                RequiredLength = await SettingManager.GetSettingValueAsync<int>(AbpZeroSettingNames.UserManagement.PasswordComplexity.RequiredLength)
+                RequireDigit =
+                    await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement
+                        .PasswordComplexity.RequireDigit),
+                RequireLowercase =
+                    await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement
+                        .PasswordComplexity.RequireLowercase),
+                RequireNonAlphanumeric =
+                    await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement
+                        .PasswordComplexity.RequireNonAlphanumeric),
+                RequireUppercase =
+                    await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement
+                        .PasswordComplexity.RequireUppercase),
+                RequiredLength =
+                    await SettingManager.GetSettingValueAsync<int>(AbpZeroSettingNames.UserManagement.PasswordComplexity
+                        .RequiredLength)
             };
 
             return new GetPasswordComplexitySettingOutput
@@ -259,37 +409,63 @@ namespace CoreOSR.Authorization.Users.Profile
         [DisableAuditing]
         public async Task<GetProfilePictureOutput> GetProfilePicture()
         {
-            var user = await UserManager.GetUserByIdAsync(AbpSession.GetUserId());
-            if (user.ProfilePictureId == null)
+            using (var profileImageService = await _profileImageServiceFactory.Get(AbpSession.ToUserIdentifier()))
+            {
+                var profilePictureContent = await profileImageService.Object.GetProfilePictureContentForUser(
+                    AbpSession.ToUserIdentifier()
+                );
+
+                return new GetProfilePictureOutput(profilePictureContent);
+            }
+        }
+
+        [AbpAllowAnonymous]
+        public async Task<GetProfilePictureOutput> GetProfilePictureByUserName(string username)
+        {
+            var user = await UserManager.FindByNameAsync(username);
+            if (user == null)
             {
                 return new GetProfilePictureOutput(string.Empty);
             }
 
-            return await GetProfilePictureById(user.ProfilePictureId.Value);
+            var userIdentifier = new UserIdentifier(AbpSession.TenantId, user.Id);
+            using (var profileImageService = await _profileImageServiceFactory.Get(userIdentifier))
+            {
+                var profileImage = await profileImageService.Object.GetProfilePictureContentForUser(userIdentifier);
+                return new GetProfilePictureOutput(profileImage);
+            }
         }
 
-        public async Task<GetProfilePictureOutput> GetFriendProfilePictureById(GetFriendProfilePictureByIdInput input)
+        public async Task<GetProfilePictureOutput> GetFriendProfilePicture(GetFriendProfilePictureInput input)
         {
-            if (!input.ProfilePictureId.HasValue || await _friendshipManager.GetFriendshipOrNullAsync(AbpSession.ToUserIdentifier(), new UserIdentifier(input.TenantId, input.UserId)) == null)
+            var friendUserIdentifier = input.ToUserIdentifier();
+            var friendShip = await _friendshipManager.GetFriendshipOrNullAsync(
+                AbpSession.ToUserIdentifier(),
+                friendUserIdentifier
+            );
+
+            if (friendShip == null)
             {
                 return new GetProfilePictureOutput(string.Empty);
             }
 
-            using (CurrentUnitOfWork.SetTenantId(input.TenantId))
-            {
-                var bytes = await GetProfilePictureByIdOrNull(input.ProfilePictureId.Value);
-                if (bytes == null)
-                {
-                    return new GetProfilePictureOutput(string.Empty);
-                }
 
-                return new GetProfilePictureOutput(Convert.ToBase64String(bytes));
+            using (var profileImageService = await _profileImageServiceFactory.Get(friendUserIdentifier))
+            {
+                var image = await profileImageService.Object.GetProfilePictureContentForUser(friendUserIdentifier);
+                return new GetProfilePictureOutput(image);
             }
         }
 
-        public async Task<GetProfilePictureOutput> GetProfilePictureById(Guid profilePictureId)
+        [AbpAllowAnonymous]
+        public async Task<GetProfilePictureOutput> GetProfilePictureByUser(long userId)
         {
-            return await GetProfilePictureByIdInternal(profilePictureId);
+            var userIdentifier = new UserIdentifier(AbpSession.TenantId, userId);
+            using (var profileImageService = await _profileImageServiceFactory.Get(userIdentifier))
+            {
+                var profileImage = await profileImageService.Object.GetProfilePictureContentForUser(userIdentifier);
+                return new GetProfilePictureOutput(profileImage);
+            }
         }
 
         public async Task ChangeLanguage(ChangeUserLanguageDto input)

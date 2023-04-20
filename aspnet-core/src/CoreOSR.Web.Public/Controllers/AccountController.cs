@@ -46,7 +46,7 @@ namespace CoreOSR.Web.Public.Controllers
 
             var targetUserId = Convert.ToInt64(Base64Decode(userId));
 
-            var user = _userManager.GetUser(new UserIdentifier(targetTenantId, targetUserId));
+            var user = await _userManager.GetUserAsync(new UserIdentifier(targetTenantId, targetUserId));
             if (user == null)
             {
                 return RedirectToAction("Index", "Home");

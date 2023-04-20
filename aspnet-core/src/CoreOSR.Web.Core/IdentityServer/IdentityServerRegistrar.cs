@@ -1,4 +1,6 @@
-﻿using Abp.IdentityServer4;
+﻿using System;
+using Abp.IdentityServer4vNext;
+using IdentityServer4.Configuration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using CoreOSR.Authorization.Users;
@@ -8,15 +10,21 @@ namespace CoreOSR.Web.IdentityServer
 {
     public static class IdentityServerRegistrar
     {
-        public static void Register(IServiceCollection services, IConfigurationRoot configuration)
+        public static void Register(IServiceCollection services, IConfigurationRoot configuration, Action<IdentityServerOptions> setupOptions)
         {
-            services.AddIdentityServer()
+            services.AddIdentityServer(setupOptions)
                 .AddDeveloperSigningCredential()
                 .AddInMemoryIdentityResources(IdentityServerConfig.GetIdentityResources())
+                .AddInMemoryApiScopes(IdentityServerConfig.GetApiScopes())
                 .AddInMemoryApiResources(IdentityServerConfig.GetApiResources())
                 .AddInMemoryClients(IdentityServerConfig.GetClients(configuration))
                 .AddAbpPersistedGrants<CoreOSRDbContext>()
                 .AddAbpIdentityServer<User>();
+        }
+
+        public static void Register(IServiceCollection services, IConfigurationRoot configuration)
+        {
+            Register(services, configuration, options => { });
         }
     }
 }

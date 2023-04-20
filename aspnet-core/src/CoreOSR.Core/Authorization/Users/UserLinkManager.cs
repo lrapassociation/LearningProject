@@ -21,71 +21,84 @@ namespace CoreOSR.Authorization.Users
         private readonly ICacheManager _cacheManager;
         private readonly UserManager _userManager;
         private readonly UserClaimsPrincipalFactory _principalFactory;
-
+        private readonly IUnitOfWorkManager _unitOfWorkManager;
+        
         public IAbpSession AbpSession { get; set; }
 
         public UserLinkManager(
             IRepository<UserAccount, long> userAccountRepository,
             ICacheManager cacheManager, 
             UserManager userManager,
-            UserClaimsPrincipalFactory principalFactory)
+            UserClaimsPrincipalFactory principalFactory, 
+            IUnitOfWorkManager unitOfWorkManager)
         {
             _userAccountRepository = userAccountRepository;
             _cacheManager = cacheManager;
             _userManager = userManager;
             _principalFactory = principalFactory;
+            _unitOfWorkManager = unitOfWorkManager;
 
             AbpSession = NullAbpSession.Instance;
         }
-
-        [UnitOfWork]
+        
         public virtual async Task Link(User firstUser, User secondUser)
         {
-            var firstUserAccount = await GetUserAccountAsync(firstUser.ToUserIdentifier());
-            var secondUserAccount = await GetUserAccountAsync(secondUser.ToUserIdentifier());
-
-            var userLinkId = firstUserAccount.UserLinkId ?? firstUserAccount.Id;
-            firstUserAccount.UserLinkId = userLinkId;
-
-            var userAccountsToLink = secondUserAccount.UserLinkId.HasValue
-                ? _userAccountRepository.GetAllList(ua => ua.UserLinkId == secondUserAccount.UserLinkId.Value)
-                : new List<UserAccount> { secondUserAccount };
-
-            userAccountsToLink.ForEach(u =>
+            await _unitOfWorkManager.WithUnitOfWorkAsync(async () =>
             {
-                u.UserLinkId = userLinkId;
-            });
+                var firstUserAccount = await GetUserAccountAsync(firstUser.ToUserIdentifier());
+                var secondUserAccount = await GetUserAccountAsync(secondUser.ToUserIdentifier());
 
-            await CurrentUnitOfWork.SaveChangesAsync();
+                var userLinkId = firstUserAccount.UserLinkId ?? firstUserAccount.Id;
+                firstUserAccount.UserLinkId = userLinkId;
+
+                var userAccountsToLink = secondUserAccount.UserLinkId.HasValue
+                    ? await _userAccountRepository.GetAllListAsync(ua => ua.UserLinkId == secondUserAccount.UserLinkId.Value)
+                    : new List<UserAccount> { secondUserAccount };
+
+                userAccountsToLink.ForEach(u =>
+                {
+                    u.UserLinkId = userLinkId;
+                });
+
+                await CurrentUnitOfWork.SaveChangesAsync();
+            });
         }
 
-        [UnitOfWork]
         public virtual async Task<bool> AreUsersLinked(UserIdentifier firstUserIdentifier, UserIdentifier secondUserIdentifier)
         {
-            var firstUserAccount = await GetUserAccountAsync(firstUserIdentifier);
-            var secondUserAccount = await GetUserAccountAsync(secondUserIdentifier);
-
-            if (!firstUserAccount.UserLinkId.HasValue || !secondUserAccount.UserLinkId.HasValue)
+            return await _unitOfWorkManager.WithUnitOfWorkAsync(async () =>
             {
-                return false;
-            }
+                var firstUserAccount = await GetUserAccountAsync(firstUserIdentifier);
+                var secondUserAccount = await GetUserAccountAsync(secondUserIdentifier);
 
-            return firstUserAccount.UserLinkId == secondUserAccount.UserLinkId;
+                if (!firstUserAccount.UserLinkId.HasValue || !secondUserAccount.UserLinkId.HasValue)
+                {
+                    return false;
+                }
+
+                return firstUserAccount.UserLinkId == secondUserAccount.UserLinkId;
+            });
         }
-
-        [UnitOfWork]
+        
         public virtual async Task Unlink(UserIdentifier userIdentifier)
         {
-            var targetUserAccount = await GetUserAccountAsync(userIdentifier);
-            targetUserAccount.UserLinkId = null;
+            await _unitOfWorkManager.WithUnitOfWorkAsync(async () =>
+            {
+                var targetUserAccount = await GetUserAccountAsync(userIdentifier);
+                targetUserAccount.UserLinkId = null;
 
-            await CurrentUnitOfWork.SaveChangesAsync();
+                await CurrentUnitOfWork.SaveChangesAsync();
+            });
         }
-
-        [UnitOfWork]
+        
         public virtual async Task<UserAccount> GetUserAccountAsync(UserIdentifier userIdentifier)
         {
-            return await _userAccountRepository.FirstOrDefaultAsync(ua => ua.TenantId == userIdentifier.TenantId && ua.UserId == userIdentifier.UserId);
+            return await _unitOfWorkManager.WithUnitOfWorkAsync(async () =>
+            {
+                return await _userAccountRepository.FirstOrDefaultAsync(
+                    ua => ua.TenantId == userIdentifier.TenantId && ua.UserId == userIdentifier.UserId
+                );
+            });
         }
 
         public async Task<string> GetAccountSwitchToken(long targetUserId, int? targetTenantId)

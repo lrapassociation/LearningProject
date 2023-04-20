@@ -9,7 +9,13 @@ namespace CoreOSR.Tenants.Dashboard
 
         GetDashboardDataOutput GetDashboardData(GetDashboardDataInput input);
 
+        GetDailySalesOutput GetDailySales();
+
+        GetProfitShareOutput GetProfitShare();
+
         GetSalesSummaryOutput GetSalesSummary(GetSalesSummaryInput input);
+
+        GetTopStatsOutput GetTopStats();
 
         GetRegionalStatsOutput GetRegionalStats();
 

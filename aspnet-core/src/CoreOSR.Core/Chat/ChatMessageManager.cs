@@ -26,6 +26,7 @@ namespace CoreOSR.Chat
         private readonly IUserEmailer _userEmailer;
         private readonly IRepository<ChatMessage, long> _chatMessageRepository;
         private readonly IChatFeatureChecker _chatFeatureChecker;
+        private readonly IUnitOfWorkManager _unitOfWorkManager;
 
         public ChatMessageManager(
             IFriendshipManager friendshipManager,
@@ -36,7 +37,8 @@ namespace CoreOSR.Chat
             IUserFriendsCache userFriendsCache,
             IUserEmailer userEmailer,
             IRepository<ChatMessage, long> chatMessageRepository,
-            IChatFeatureChecker chatFeatureChecker)
+            IChatFeatureChecker chatFeatureChecker,
+            IUnitOfWorkManager unitOfWorkManager)
         {
             _friendshipManager = friendshipManager;
             _chatCommunicator = chatCommunicator;
@@ -47,6 +49,7 @@ namespace CoreOSR.Chat
             _userEmailer = userEmailer;
             _chatMessageRepository = chatMessageRepository;
             _chatFeatureChecker = chatFeatureChecker;
+            _unitOfWorkManager = unitOfWorkManager;
         }
 
         public async Task SendMessageAsync(UserIdentifier sender, UserIdentifier receiver, string message, string senderTenancyName, string senderUserName, Guid? senderProfilePictureId)
@@ -77,25 +80,29 @@ namespace CoreOSR.Chat
             }
         }
 
-        [UnitOfWork]
         public virtual long Save(ChatMessage message)
         {
-            using (CurrentUnitOfWork.SetTenantId(message.TenantId))
+            return _unitOfWorkManager.WithUnitOfWork(() =>
             {
-                return _chatMessageRepository.InsertAndGetId(message);
-            }
+                using (CurrentUnitOfWork.SetTenantId(message.TenantId))
+                {
+                    return _chatMessageRepository.InsertAndGetId(message);
+                }
+            });
         }
 
-        [UnitOfWork]
         public virtual int GetUnreadMessageCount(UserIdentifier sender, UserIdentifier receiver)
         {
-            using (CurrentUnitOfWork.SetTenantId(receiver.TenantId))
+            return _unitOfWorkManager.WithUnitOfWork(() =>
             {
-                return _chatMessageRepository.Count(cm => cm.UserId == receiver.UserId &&
-                                                          cm.TargetUserId == sender.UserId &&
-                                                          cm.TargetTenantId == sender.TenantId &&
-                                                          cm.ReadState == ChatMessageReadState.Unread);
-            }
+                using (CurrentUnitOfWork.SetTenantId(receiver.TenantId))
+                {
+                    return _chatMessageRepository.Count(cm => cm.UserId == receiver.UserId &&
+                                                              cm.TargetUserId == sender.UserId &&
+                                                              cm.TargetTenantId == sender.TenantId &&
+                                                              cm.ReadState == ChatMessageReadState.Unread);
+                }
+            });
         }
 
         public async Task<ChatMessage> FindMessageAsync(int id, long userId)
@@ -110,11 +117,9 @@ namespace CoreOSR.Chat
             {
                 friendshipState = FriendshipState.Accepted;
 
-                var receiverTenancyName = receiverIdentifier.TenantId.HasValue
-                    ? _tenantCache.Get(receiverIdentifier.TenantId.Value).TenancyName
-                    : null;
+                var receiverTenancyName = await GetTenancyNameOrNull(receiverIdentifier.TenantId);
 
-                var receiverUser = _userManager.GetUser(receiverIdentifier);
+                var receiverUser = await _userManager.GetUserAsync(receiverIdentifier);
                 await _friendshipManager.CreateFriendshipAsync(
                     new Friendship(
                         senderIdentifier,
@@ -152,25 +157,31 @@ namespace CoreOSR.Chat
 
         private async Task HandleReceiverToSenderAsync(UserIdentifier senderIdentifier, UserIdentifier receiverIdentifier, string message, Guid sharedMessageId)
         {
-            var friendshipState = (await _friendshipManager.GetFriendshipOrNullAsync(receiverIdentifier, senderIdentifier))?.State;
+            var friendship = await _friendshipManager.GetFriendshipOrNullAsync(receiverIdentifier, senderIdentifier);
+            var friendshipState = friendship?.State;
+            var clients = _onlineClientManager.GetAllByUserId(receiverIdentifier);
 
             if (friendshipState == null)
             {
-                var senderTenancyName = senderIdentifier.TenantId.HasValue ?
-                    _tenantCache.Get(senderIdentifier.TenantId.Value).TenancyName :
-                    null;
+                var senderTenancyName = await GetTenancyNameOrNull(senderIdentifier.TenantId);
+                var senderUser = await _userManager.GetUserAsync(senderIdentifier);
 
-                var senderUser = _userManager.GetUser(senderIdentifier);
-                await _friendshipManager.CreateFriendshipAsync(
-                    new Friendship(
-                        receiverIdentifier,
-                        senderIdentifier,
-                        senderTenancyName,
-                        senderUser.UserName,
-                        senderUser.ProfilePictureId,
-                        FriendshipState.Accepted
-                    )
+                friendship = new Friendship(
+                    receiverIdentifier,
+                    senderIdentifier,
+                    senderTenancyName,
+                    senderUser.UserName,
+                    senderUser.ProfilePictureId,
+                    FriendshipState.Accepted
                 );
+
+                await _friendshipManager.CreateFriendshipAsync(friendship);
+
+                if (clients.Any())
+                {
+                    var isFriendOnline = _onlineClientManager.IsOnline(receiverIdentifier);
+                    await _chatCommunicator.SendFriendshipRequestToClient(clients, friendship, false, isFriendOnline);
+                }
             }
 
             if (friendshipState == FriendshipState.Blocked)
@@ -191,20 +202,17 @@ namespace CoreOSR.Chat
 
             Save(sentMessage);
 
-            var clients = _onlineClientManager.GetAllByUserId(receiverIdentifier);
             if (clients.Any())
             {
                 await _chatCommunicator.SendMessageToClient(clients, sentMessage);
             }
             else if (GetUnreadMessageCount(senderIdentifier, receiverIdentifier) == 1)
             {
-                var senderTenancyName = senderIdentifier.TenantId.HasValue ?
-                    _tenantCache.Get(senderIdentifier.TenantId.Value).TenancyName :
-                    null;
+                var senderTenancyName = await GetTenancyNameOrNull(senderIdentifier.TenantId);
 
                 await _userEmailer.TryToSendChatMessageMail(
-                      _userManager.GetUser(receiverIdentifier),
-                      _userManager.GetUser(senderIdentifier).UserName,
+                      await _userManager.GetUserAsync(receiverIdentifier),
+                      (await _userManager.GetUserAsync(senderIdentifier)).UserName,
                       senderTenancyName,
                       sentMessage
                   );
@@ -239,6 +247,17 @@ namespace CoreOSR.Chat
             friendship.FriendProfilePictureId = senderProfilePictureId;
 
             await _friendshipManager.UpdateFriendshipAsync(friendship);
+        }
+
+        private async Task<string> GetTenancyNameOrNull(int? tenantId)
+        {
+            if (tenantId.HasValue)
+            {
+                var tenant = await _tenantCache.GetAsync(tenantId.Value);
+                return tenant.TenancyName;
+            }
+
+            return null;
         }
     }
 }

@@ -4,7 +4,7 @@ import { AppConsts } from '@shared/AppConsts';
 import { accountModuleAnimation } from '@shared/animations/routerTransition';
 import { AppComponentBase } from '@shared/common/app-component-base';
 import {
-     EditionSelectDto,
+    EditionSelectDto,
     PasswordComplexitySetting,
     ProfileServiceProxy,
     RegisterTenantOutput,
@@ -12,19 +12,18 @@ import {
     PaymentPeriodType,
     SubscriptionPaymentGatewayType,
     SubscriptionStartType,
-    EditionPaymentType
+    EditionPaymentType,
 } from '@shared/service-proxies/service-proxies';
 import { RegisterTenantModel } from './register-tenant.model';
 import { TenantRegistrationHelperService } from './tenant-registration-helper.service';
 import { finalize, catchError } from 'rxjs/operators';
-import { RecaptchaComponent } from 'ng-recaptcha';
+import { ReCaptchaV3Service } from 'ng-recaptcha';
 
 @Component({
     templateUrl: './register-tenant.component.html',
-    animations: [accountModuleAnimation()]
+    animations: [accountModuleAnimation()],
 })
 export class RegisterTenantComponent extends AppComponentBase implements OnInit, AfterViewInit {
-    @ViewChild('recaptchaRef', {static: true}) recaptchaRef: RecaptchaComponent;
     model: RegisterTenantModel = new RegisterTenantModel();
     passwordComplexitySetting: PasswordComplexitySetting = new PasswordComplexitySetting();
     subscriptionStartType = SubscriptionStartType;
@@ -33,7 +32,6 @@ export class RegisterTenantComponent extends AppComponentBase implements OnInit,
     selectedPaymentPeriodType: PaymentPeriodType = PaymentPeriodType.Monthly;
     subscriptionPaymentGateway = SubscriptionPaymentGatewayType;
     paymentId = '';
-    recaptchaSiteKey: string = AppConsts.recaptchaSiteKey;
 
     saving = false;
 
@@ -43,9 +41,14 @@ export class RegisterTenantComponent extends AppComponentBase implements OnInit,
         private _router: Router,
         private _profileService: ProfileServiceProxy,
         private _tenantRegistrationHelper: TenantRegistrationHelperService,
-        private _activatedRoute: ActivatedRoute
+        private _activatedRoute: ActivatedRoute,
+        private _reCaptchaV3Service: ReCaptchaV3Service
     ) {
         super(injector);
+    }
+
+    get useCaptcha(): boolean {
+        return this.setting.getBoolean('App.TenantManagement.UseCaptchaOnRegistration');
     }
 
     ngOnInit() {
@@ -62,57 +65,52 @@ export class RegisterTenantComponent extends AppComponentBase implements OnInit,
             return;
         }
 
-        this._profileService.getPasswordComplexitySetting().subscribe(result => {
+        this._profileService.getPasswordComplexitySetting().subscribe((result) => {
             this.passwordComplexitySetting = result.setting;
         });
     }
 
     ngAfterViewInit() {
         if (this.model.editionId) {
-            this._tenantRegistrationService.getEdition(this.model.editionId)
-                .subscribe((result: EditionSelectDto) => {
-                    this.model.edition = result;
-                });
+            this._tenantRegistrationService.getEdition(this.model.editionId).subscribe((result: EditionSelectDto) => {
+                this.model.edition = result;
+            });
         }
-    }
-
-    get useCaptcha(): boolean {
-        return this.setting.getBoolean('App.TenantManagement.UseCaptchaOnRegistration');
     }
 
     save(): void {
-        if (this.useCaptcha && !this.model.captchaResponse) {
-            this.message.warn(this.l('CaptchaCanNotBeEmpty'));
-            return;
-        }
-
-        this.saving = true;
-        this._tenantRegistrationService.registerTenant(this.model)
-            .pipe(finalize(() => { this.saving = false; }))
-            .pipe(catchError((err, caught): any => {
-                this.recaptchaRef.reset();
-            }))
-            .subscribe((result: RegisterTenantOutput) => {
-                this.notify.success(this.l('SuccessfullyRegistered'));
-                this._tenantRegistrationHelper.registrationResult = result;
-
-                if (parseInt(this.model.subscriptionStartType.toString()) === SubscriptionStartType.Paid) {
-                    this._router.navigate(['account/buy'],
-                        {
+        let recaptchaCallback = (token: string) => {
+            this.saving = true;
+            this.model.captchaResponse = token;
+            this._tenantRegistrationService
+                .registerTenant(this.model)
+                .pipe(
+                    finalize(() => {
+                        this.saving = false;
+                    })
+                )
+                .subscribe((result: RegisterTenantOutput) => {
+                    this.notify.success(this.l('SuccessfullyRegistered'));
+                    this._tenantRegistrationHelper.registrationResult = result;
+                    if (parseInt(this.model.subscriptionStartType.toString()) === SubscriptionStartType.Paid) {
+                        this._router.navigate(['account/buy'], {
                             queryParams: {
                                 tenantId: result.tenantId,
                                 editionId: this.model.editionId,
                                 subscriptionStartType: this.model.subscriptionStartType,
-                                editionPaymentType: this.editionPaymentType
-                            }
+                                editionPaymentType: this.editionPaymentType,
+                            },
                         });
-                } else {
-                    this._router.navigate(['account/register-tenant-result']);
-                }
-            });
-    }
+                    } else {
+                        this._router.navigate(['account/register-tenant-result']);
+                    }
+                });
+        };
 
-    captchaResolved(captchaResponse: string): void {
-        this.model.captchaResponse = captchaResponse;
+        if (this.useCaptcha) {
+            this._reCaptchaV3Service.execute('register_tenant').subscribe((token => recaptchaCallback(token)));
+        } else {
+            recaptchaCallback(null);
+        }
     }
 }

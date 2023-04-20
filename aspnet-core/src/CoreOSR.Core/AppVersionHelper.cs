@@ -13,7 +13,7 @@ namespace CoreOSR
         /// Gets current version of the application.
         /// It's also shown in the web page.
         /// </summary>
-        public const string Version = "7.2.0.0";
+        public const string Version = "12.1.0";
 
         /// <summary>
         /// Gets release (last build) date of the application.

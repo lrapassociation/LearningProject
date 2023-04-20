@@ -21,7 +21,8 @@ namespace CoreOSR.Web.UiCustomization
             _serviceProvider = serviceProvider;
         }
 
-        public async Task<IUiCustomizer> GetCurrentUiCustomizer()
+        public async Task<IUiCustomizer> 
+            GetCurrentUiCustomizer()
         {
             var theme = await _settingManager.GetSettingValueAsync(AppSettings.UiManagement.Theme);
             return GetUiCustomizerInternal(theme);
@@ -60,11 +61,6 @@ namespace CoreOSR.Web.UiCustomization
                 return _serviceProvider.GetService<Theme11UiCustomizer>();
             }
 
-            if (theme.Equals(AppConsts.Theme12, StringComparison.InvariantCultureIgnoreCase))
-            {
-                return _serviceProvider.GetService<Theme12UiCustomizer>();
-            }
-
             if (theme.Equals(AppConsts.Theme3, StringComparison.InvariantCultureIgnoreCase))
             {
                 return _serviceProvider.GetService<Theme3UiCustomizer>();
@@ -88,6 +84,16 @@ namespace CoreOSR.Web.UiCustomization
             if (theme.Equals(AppConsts.Theme10, StringComparison.InvariantCultureIgnoreCase))
             {
                 return _serviceProvider.GetService<Theme10UiCustomizer>();
+            }
+            
+            if (theme.Equals(AppConsts.Theme12, StringComparison.InvariantCultureIgnoreCase))
+            {
+                return _serviceProvider.GetService<Theme12UiCustomizer>();
+            }
+            
+            if (theme.Equals(AppConsts.Theme13, StringComparison.InvariantCultureIgnoreCase))
+            {
+                return _serviceProvider.GetService<Theme13UiCustomizer>();
             }
 
             return _serviceProvider.GetService<ThemeDefaultUiCustomizer>();

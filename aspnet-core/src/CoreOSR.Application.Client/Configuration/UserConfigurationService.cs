@@ -14,7 +14,7 @@ namespace CoreOSR.Configuration
 
         public Func<Task> OnSessionTimeOut { get; set; }
 
-        public Func<string, Task> OnAccessTokenRefresh { get; set; }
+        public Func<string, string, Task> OnAccessTokenRefresh { get; set; }
 
         public UserConfigurationService(AbpApiClient apiClient, IAccessTokenManager tokenManager)
         {
@@ -60,11 +60,11 @@ namespace CoreOSR.Configuration
 
         private async Task<AbpUserConfigurationDto> RefreshAccessTokenAndSendRequestAgain()
         {
-            var newAccessToken = await _tokenManager.RefreshTokenAsync();
-            
+            var newTokens = await _tokenManager.RefreshTokenAsync();
+
             if (OnAccessTokenRefresh != null)
             {
-                await OnAccessTokenRefresh(newAccessToken);
+                await OnAccessTokenRefresh(newTokens.accessToken, newTokens.encryptedAccessToken);
             }
 
             return await _apiClient.GetAsync<AbpUserConfigurationDto>(Endpoint);

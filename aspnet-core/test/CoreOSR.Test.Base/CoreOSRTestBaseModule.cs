@@ -41,6 +41,8 @@ namespace CoreOSR.Test.Base
         {
             var configuration = GetConfiguration();
 
+            Configuration.BackgroundJobs.IsJobExecutionEnabled = false;
+
             Configuration.UnitOfWork.Timeout = TimeSpan.FromMinutes(30);
             Configuration.UnitOfWork.IsTransactional = false;
 

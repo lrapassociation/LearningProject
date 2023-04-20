@@ -1,7 +1,7 @@
-﻿using Abp.IdentityServer4;
+﻿using Abp.IdentityServer4vNext;
 using Abp.Zero.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
+using CoreOSR.Authorization.Delegation;
 using CoreOSR.Authorization.Roles;
 using CoreOSR.Authorization.Users;
 using CoreOSR.Chat;
@@ -32,10 +32,16 @@ namespace CoreOSR.EntityFrameworkCore
 
         public virtual DbSet<PersistedGrantEntity> PersistedGrants { get; set; }
 
+        public virtual DbSet<SubscriptionPaymentExtensionData> SubscriptionPaymentExtensionDatas { get; set; }
+
+        public virtual DbSet<UserDelegation> UserDelegations { get; set; }
+        
+        public virtual DbSet<RecentPassword> RecentPasswords { get; set; }
+
         public CoreOSRDbContext(DbContextOptions<CoreOSRDbContext> options)
             : base(options)
         {
-            
+
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -73,6 +79,20 @@ namespace CoreOSR.EntityFrameworkCore
             {
                 b.HasIndex(e => new { e.Status, e.CreationTime });
                 b.HasIndex(e => new { PaymentId = e.ExternalPaymentId, e.Gateway });
+            });
+
+            modelBuilder.Entity<SubscriptionPaymentExtensionData>(b =>
+            {
+                b.HasQueryFilter(m => !m.IsDeleted)
+                    .HasIndex(e => new { e.SubscriptionPaymentId, e.Key, e.IsDeleted })
+                    .IsUnique()
+                    .HasFilter("[IsDeleted] = 0");
+            });
+
+            modelBuilder.Entity<UserDelegation>(b =>
+            {
+                b.HasIndex(e => new { e.TenantId, e.SourceUserId });
+                b.HasIndex(e => new { e.TenantId, e.TargetUserId });
             });
 
             modelBuilder.ConfigurePersistedGrantEntity();

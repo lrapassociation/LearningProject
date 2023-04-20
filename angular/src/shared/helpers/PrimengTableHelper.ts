@@ -1,6 +1,6 @@
-import { LazyLoadEvent } from 'primeng/components/common/lazyloadevent';
-import { Paginator } from 'primeng/components/paginator/paginator';
-import { Table } from 'primeng/components/table/table';
+import { LazyLoadEvent } from 'primeng/api';
+import { Paginator } from 'primeng/paginator';
+import { Table } from 'primeng/table';
 import * as rtlDetect from 'rtl-detect';
 
 export class PrimengTableHelper {
@@ -31,13 +31,31 @@ export class PrimengTableHelper {
     }
 
     getSorting(table: Table): string {
-        let sorting;
-        if (table.sortField) {
-            sorting = table.sortField;
-            if (table.sortOrder === 1) {
-                sorting += ' ASC';
-            } else if (table.sortOrder === -1) {
-                sorting += ' DESC';
+        let sorting = '';
+
+        if (table.sortMode === 'multiple') {
+            if (table.multiSortMeta) {
+                for (let i = 0; i < table.multiSortMeta.length; i++) {
+                    const element = table.multiSortMeta[i];
+                    if (i > 0) {
+                        sorting += ',';
+                    }
+                    sorting += element.field;
+                    if (element.order === 1) {
+                        sorting += ' ASC';
+                    } else if (element.order === -1) {
+                        sorting += ' DESC';
+                    }
+                }
+            }
+        } else {
+            if (table.sortField) {
+                sorting = table.sortField;
+                if (table.sortOrder === 1) {
+                    sorting += ' ASC';
+                } else if (table.sortOrder === -1) {
+                    sorting += ' DESC';
+                }
             }
         }
 
@@ -69,7 +87,8 @@ export class PrimengTableHelper {
     }
 
     shouldResetPaging(event: LazyLoadEvent): boolean {
-        if (!event /*|| event.sortField*/) { // if you want to reset after sorting, comment out parameter
+        if (!event /*|| event.sortField*/) {
+            // if you want to reset after sorting, comment out parameter
             return true;
         }
 
@@ -82,10 +101,10 @@ export class PrimengTableHelper {
             return;
         }
 
-        const body: HTMLElement = table.el.nativeElement.querySelector('.ui-table-scrollable-body');
-        const header: HTMLElement = table.el.nativeElement.querySelector('.ui-table-scrollable-header');
+        const body: HTMLElement = table.el.nativeElement.querySelector('.p-datatable-scrollable-body');
+        const header: HTMLElement = table.el.nativeElement.querySelector('.p-datatable-scrollable-header');
         body.addEventListener('scroll', () => {
-          header.scrollLeft = body.scrollLeft;
+            header.scrollLeft = body.scrollLeft;
         });
     }
 }

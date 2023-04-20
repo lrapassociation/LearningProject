@@ -3,6 +3,9 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using Abp.AspNetCore;
+using Abp.AspNetCore.Configuration;
+using Abp.AspNetCore.Mvc.Antiforgery;
+using Abp.AspNetCore.Mvc.Extensions;
 using Abp.AspNetCore.SignalR.Hubs;
 using Abp.AspNetZeroCore.Web.Authentication.JwtBearer;
 using Abp.Castle.Logging.Log4Net;
@@ -13,8 +16,6 @@ using Castle.Facilities.Logging;
 using Hangfire;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Cors.Internal;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using CoreOSR.Authorization;
@@ -23,7 +24,6 @@ using CoreOSR.EntityFrameworkCore;
 using CoreOSR.Identity;
 using CoreOSR.Web.Chat.SignalR;
 using CoreOSR.Web.Common;
-using PaulMiami.AspNetCore.Mvc.Recaptcha;
 using Swashbuckle.AspNetCore.Swagger;
 using CoreOSR.Web.IdentityServer;
 using CoreOSR.Web.Swagger;
@@ -32,11 +32,19 @@ using ILoggerFactory = Microsoft.Extensions.Logging.ILoggerFactory;
 using GraphQL.Server;
 using GraphQL.Server.Ui.Playground;
 using HealthChecks.UI.Client;
+using IdentityServer4.Configuration;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Hosting;
+using Microsoft.OpenApi.Models;
 using CoreOSR.Configure;
 using CoreOSR.Schemas;
 using CoreOSR.Web.HealthCheck;
+using Newtonsoft.Json.Serialization;
+using Owl.reCAPTCHA;
 using HealthChecksUISettings = HealthChecks.UI.Configuration.Settings;
+using Microsoft.AspNetCore.Server.Kestrel.Https;
+using CoreOSR.Web.MultiTenancy;
 
 namespace CoreOSR.Web.Startup
 {
@@ -45,9 +53,9 @@ namespace CoreOSR.Web.Startup
         private const string DefaultCorsPolicyName = "localhost";
 
         private readonly IConfigurationRoot _appConfiguration;
-        private readonly IHostingEnvironment _hostingEnvironment;
+        private readonly IWebHostEnvironment _hostingEnvironment;
 
-        public Startup(IHostingEnvironment env)
+        public Startup(IWebHostEnvironment env)
         {
             _hostingEnvironment = env;
             _appConfiguration = env.GetAppConfiguration();
@@ -56,12 +64,16 @@ namespace CoreOSR.Web.Startup
         public IServiceProvider ConfigureServices(IServiceCollection services)
         {
             //MVC
-            services.AddMvc(options =>
+            services.AddControllersWithViews(options =>
             {
-                options.Filters.Add(new CorsAuthorizationFilterFactory(DefaultCorsPolicyName));
-            }).SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
+                options.Filters.Add(new AbpAutoValidateAntiforgeryTokenAttribute());
+            })
+#if DEBUG
+                .AddRazorRuntimeCompilation()
+#endif
+                .AddNewtonsoftJson();
 
-            services.AddSignalR(options => { options.EnableDetailedErrors = true; });
+            services.AddSignalR();
 
             //Configure CORS for angular2 UI
             services.AddCors(options =>
@@ -84,40 +96,44 @@ namespace CoreOSR.Web.Startup
                 });
             });
 
+            if (bool.Parse(_appConfiguration["KestrelServer:IsEnabled"]))
+            {
+                ConfigureKestrel(services);
+            }
+
             IdentityRegistrar.Register(services);
             AuthConfigurer.Configure(services, _appConfiguration);
 
             //Identity server
             if (bool.Parse(_appConfiguration["IdentityServer:IsEnabled"]))
             {
-                IdentityServerRegistrar.Register(services, _appConfiguration);
+                IdentityServerRegistrar.Register(services, _appConfiguration, options =>
+                    options.UserInteraction = new UserInteractionOptions()
+                    {
+                        LoginUrl = "/UI/Login",
+                        LogoutUrl = "/UI/LogOut",
+                        ErrorUrl = "/Error"
+                    });
+            }
+            else
+            {
+                services.Configure<SecurityStampValidatorOptions>(opts =>
+                {
+                    opts.OnRefreshingPrincipal = SecurityStampValidatorCallback.UpdatePrincipal;
+                });
             }
 
             if (WebConsts.SwaggerUiEnabled)
             {
                 //Swagger - Enable this line and the related lines in Configure method to enable swagger UI
-                services.AddSwaggerGen(options =>
-                {
-                    options.SwaggerDoc("v1", new Info { Title = "CoreOSR API", Version = "v1" });
-                    options.DocInclusionPredicate((docName, description) => true);
-                    options.UseReferencedDefinitionsForEnums();
-                    options.ParameterFilter<SwaggerEnumParameterFilter>();
-                    options.SchemaFilter<SwaggerEnumSchemaFilter>();
-                    options.OperationFilter<SwaggerOperationIdFilter>();
-                    options.OperationFilter<SwaggerOperationFilter>();
-                    options.CustomDefaultSchemaIdSelector();
-
-                    //Note: This is just for showing Authorize button on the UI. 
-                    //Authorize button's behaviour is handled in wwwroot/swagger/ui/index.html
-                    options.AddSecurityDefinition("Bearer", new BasicAuthScheme());
-                });
+                ConfigureSwagger(services);
             }
 
             //Recaptcha
-            services.AddRecaptcha(new RecaptchaOptions
+            services.AddreCAPTCHAV3(x =>
             {
-                SiteKey = _appConfiguration["Recaptcha:SiteKey"],
-                SecretKey = _appConfiguration["Recaptcha:SecretKey"]
+                x.SiteKey = _appConfiguration["Recaptcha:SiteKey"];
+                x.SiteSecret = _appConfiguration["Recaptcha:SecretKey"];
             });
 
             if (WebConsts.HangfireDashboardEnabled)
@@ -127,6 +143,8 @@ namespace CoreOSR.Web.Startup
                 {
                     config.UseSqlServerStorage(_appConfiguration.GetConnectionString("Default"));
                 });
+
+                services.AddHangfireServer();
             }
 
             if (WebConsts.GraphQL.Enabled)
@@ -136,18 +154,7 @@ namespace CoreOSR.Web.Startup
 
             if (bool.Parse(_appConfiguration["HealthChecks:HealthChecksEnabled"]))
             {
-                services.AddAbpZeroHealthCheck();
-
-                var healthCheckUISection = _appConfiguration.GetSection("HealthChecks")?.GetSection("HealthChecksUI");
-
-                if (bool.Parse(healthCheckUISection["HealthChecksUIEnabled"]))
-                {
-                    services.Configure<HealthChecksUISettings>(settings =>
-                    {
-                        healthCheckUISection.Bind(settings, c => c.BindNonPublicProperties = true);
-                    });
-                    services.AddHealthChecksUI();
-                }
+                ConfigureHealthChecks(services);
             }
 
             //Configure Abp and Dependency Injection
@@ -155,14 +162,17 @@ namespace CoreOSR.Web.Startup
             {
                 //Configure Log4Net logging
                 options.IocManager.IocContainer.AddFacility<LoggingFacility>(
-                    f => f.UseAbpLog4Net().WithConfig("log4net.config")
+                    f => f.UseAbpLog4Net().WithConfig(_hostingEnvironment.IsDevelopment()
+                        ? "log4net.config"
+                        : "log4net.Production.config")
                 );
 
-                options.PlugInSources.AddFolder(Path.Combine(_hostingEnvironment.WebRootPath, "Plugins"), SearchOption.AllDirectories);
+                options.PlugInSources.AddFolder(Path.Combine(_hostingEnvironment.WebRootPath, "Plugins"),
+                    SearchOption.AllDirectories);
             });
         }
 
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, ILoggerFactory loggerFactory)
         {
             //Initializes ABP framework.
             app.UseAbp(options =>
@@ -173,12 +183,22 @@ namespace CoreOSR.Web.Startup
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
+                app.UseHsts();
             }
             else
             {
                 app.UseStatusCodePagesWithRedirects("~/Error?statusCode={0}");
                 app.UseExceptionHandler("/Error");
             }
+
+            app.UseStaticFiles();
+
+            if (CoreOSRConsts.PreventNotExistingTenantSubdomains)
+            {
+                app.UseMiddleware<DomainTenantCheckMiddleware>();
+            }
+
+            app.UseRouting();
 
             app.UseCors(DefaultCorsPolicyName); //Enable CORS!
 
@@ -191,30 +211,25 @@ namespace CoreOSR.Web.Startup
                 app.UseIdentityServer();
             }
 
-            app.UseStaticFiles();
+            app.UseAuthorization();
 
             using (var scope = app.ApplicationServices.CreateScope())
             {
-                if (scope.ServiceProvider.GetService<DatabaseCheckHelper>().Exist(_appConfiguration["ConnectionStrings:Default"]))
+                if (scope.ServiceProvider.GetService<DatabaseCheckHelper>()
+                    .Exist(_appConfiguration["ConnectionStrings:Default"]))
                 {
                     app.UseAbpRequestLocalization();
                 }
             }
-
-            app.UseSignalR(routes =>
-            {
-                routes.MapHub<AbpCommonHub>("/signalr");
-                routes.MapHub<ChatHub>("/signalr-chat");
-            });
 
             if (WebConsts.HangfireDashboardEnabled)
             {
                 //Hangfire dashboard &server(Enable to use Hangfire instead of default job manager)
                 app.UseHangfireDashboard(WebConsts.HangfireDashboardEndPoint, new DashboardOptions
                 {
-                    Authorization = new[] { new AbpHangfireAuthorizationFilter(AppPermissions.Pages_Administration_HangfireDashboard) }
+                    Authorization = new[]
+                        {new AbpHangfireAuthorizationFilter(AppPermissions.Pages_Administration_HangfireDashboard)}
                 });
-                app.UseHangfireServer();
             }
 
             if (bool.Parse(_appConfiguration["Payment:Stripe:IsActive"]))
@@ -232,16 +247,30 @@ namespace CoreOSR.Web.Startup
                 }
             }
 
-            app.UseMvc(routes =>
+            app.UseEndpoints(endpoints =>
             {
-                routes.MapRoute(
-                    name: "defaultWithArea",
-                    template: "{area}/{controller=Home}/{action=Index}/{id?}");
+                endpoints.MapHub<AbpCommonHub>("/signalr");
+                endpoints.MapHub<ChatHub>("/signalr-chat");
 
-                routes.MapRoute(
-                    name: "default",
-                    template: "{controller=Home}/{action=Index}/{id?}");
+                endpoints.MapControllerRoute("defaultWithArea", "{area}/{controller=Home}/{action=Index}/{id?}");
+                endpoints.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
+
+                app.ApplicationServices.GetRequiredService<IAbpAspNetCoreConfiguration>().EndpointConfiguration.ConfigureAllEndpoints(endpoints);
             });
+
+            if (bool.Parse(_appConfiguration["HealthChecks:HealthChecksEnabled"]))
+            {
+                if (bool.Parse(_appConfiguration["HealthChecks:HealthChecksUI:HealthChecksUIEnabled"]))
+                {
+                    app.UseHealthChecks("/health", new HealthCheckOptions()
+                    {
+                        Predicate = _ => true,
+                        ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+                    });
+
+                    app.UseHealthChecksUI();
+                }
+            }
 
             if (WebConsts.SwaggerUiEnabled)
             {
@@ -257,19 +286,72 @@ namespace CoreOSR.Web.Startup
                     options.InjectBaseUrl(_appConfiguration["App:ServerRootAddress"]);
                 }); //URL: /swagger
             }
+        }
 
-            if (bool.Parse(_appConfiguration["HealthChecks:HealthChecksEnabled"]))
+        private void ConfigureKestrel(IServiceCollection services)
+        {
+            services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions>(options =>
             {
-                app.UseHealthChecks("/healthz", new HealthCheckOptions()
-                {
-                    Predicate = _ => true,
-                    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-                });
+                options.Listen(new System.Net.IPEndPoint(System.Net.IPAddress.Any, 443),
+                    listenOptions =>
+                    {
+                        var certPassword = _appConfiguration.GetValue<string>("Kestrel:Certificates:Default:Password");
+                        var certPath = _appConfiguration.GetValue<string>("Kestrel:Certificates:Default:Path");
+                        var cert = new System.Security.Cryptography.X509Certificates.X509Certificate2(certPath,
+                            certPassword);
+                        listenOptions.UseHttps(new HttpsConnectionAdapterOptions()
+                        {
+                            ServerCertificate = cert
+                        });
+                    });
+            });
+        }
 
-                if (bool.Parse(_appConfiguration["HealthChecks:HealthChecksUI:HealthChecksUIEnabled"]))
+        private void ConfigureSwagger(IServiceCollection services)
+        {
+            services.AddSwaggerGen(options =>
+            {
+                options.SwaggerDoc("v1", new OpenApiInfo() { Title = "CoreOSR API", Version = "v1" });
+                options.DocInclusionPredicate((docName, description) => true);
+                options.ParameterFilter<SwaggerEnumParameterFilter>();
+                options.SchemaFilter<SwaggerEnumSchemaFilter>();
+                options.OperationFilter<SwaggerOperationIdFilter>();
+                options.OperationFilter<SwaggerOperationFilter>();
+                options.CustomDefaultSchemaIdSelector();
+
+                //add summaries to swagger
+                bool canShowSummaries = _appConfiguration.GetValue<bool>("Swagger:ShowSummaries");
+                if (canShowSummaries)
                 {
-                    app.UseHealthChecksUI();
+                    var hostXmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+                    var hostXmlPath = Path.Combine(AppContext.BaseDirectory, hostXmlFile);
+                    options.IncludeXmlComments(hostXmlPath);
+
+                    var applicationXml = $"CoreOSR.Application.xml";
+                    var applicationXmlPath = Path.Combine(AppContext.BaseDirectory, applicationXml);
+                    options.IncludeXmlComments(applicationXmlPath);
+
+                    var webCoreXmlFile = $"CoreOSR.Web.Core.xml";
+                    var webCoreXmlPath = Path.Combine(AppContext.BaseDirectory, webCoreXmlFile);
+                    options.IncludeXmlComments(webCoreXmlPath);
                 }
+            }).AddSwaggerGenNewtonsoftSupport();
+        }
+
+        private void ConfigureHealthChecks(IServiceCollection services)
+        {
+            services.AddAbpZeroHealthCheck();
+
+            var healthCheckUISection = _appConfiguration.GetSection("HealthChecks")?.GetSection("HealthChecksUI");
+
+            if (bool.Parse(healthCheckUISection["HealthChecksUIEnabled"]))
+            {
+                services.Configure<HealthChecksUISettings>(settings =>
+                {
+                    healthCheckUISection.Bind(settings, c => c.BindNonPublicProperties = true);
+                });
+                services.AddHealthChecksUI()
+                    .AddInMemoryStorage();
             }
         }
     }

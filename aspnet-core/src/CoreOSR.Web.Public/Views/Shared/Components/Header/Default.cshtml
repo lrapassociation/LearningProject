@@ -1,6 +1,10 @@
 @using CoreOSR.Web.Public.Views.Shared.Components.Header
-@using Abp.Extensions;
+@using CoreOSR.Web.Navigation
 @model HeaderViewModel
+@{
+    var orderedMenuItems = Model.Menu.Items.OrderByCustom().ToList();
+}
+
 <div class="pre-header">
     <div class="container">
         <div class="row">
@@ -16,17 +20,23 @@
                     {
                         <li>
                             <div id="LanguageDropDown" class="btn-group dropdown">
-                                <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" data-delay="1000" data-close-others="true"><i class="@Model.CurrentLanguage.Icon"></i> @Model.CurrentLanguage.DisplayName <i class="fa fa-angle-down"></i></button>
+                                <button type="button" class="btn btn-secondary dropdown-toggle" data-bs-toggle="dropdown" data-delay="1000" data-close-others="true"><i class="@Model.CurrentLanguage.Icon"></i> @Model.CurrentLanguage.DisplayName <i class="fa fa-angle-down"></i></button>
                                 <ul class="dropdown-menu" role="menu">
-                                    @foreach (var language in Model.Languages)
+                                    @foreach (var languageInfo in Model.Languages)
                                     {
-                                        if (Model.CurrentLanguage.Name == language.Name)
+                                        if (Model.CurrentLanguage.Name == languageInfo.Name)
                                         {
                                             continue;
                                         }
 
                                         <li class="language-menu-item">
-                                            <a href="@Url.Action("ChangeCulture", "AbpLocalization")?cultureName=@(language.Name)&returnUrl=@ApplicationPath@Context.Request.Path.Value.RemovePreFix("/")"><i class="@language.Icon"></i> <span>@language.DisplayName</span></a>
+                                            <a href="@Url.Action("ChangeCulture", "AbpLocalization", new {
+                                                        area = "",
+                                                        cultureName = languageInfo.Name,
+                                                        returnUrl = Context.Request.Path + Context.Request.QueryString
+                                                    })">
+                                                <i class="@languageInfo.Icon"></i> <span>@languageInfo.DisplayName</span>
+                                            </a>
                                         </li>
                                     }
                                 </ul>
@@ -43,7 +53,7 @@
                         @if (Model.LoginInformations?.User != null)
                         {
                             <div id="LanguageDropDown" class="btn-group dropdown">
-                                <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" data-delay="1000" data-close-others="true">@Model.GetShownLoginName() <i class="fa fa-angle-down"></i></button>
+                                <button type="button" class="btn btn-secondary dropdown-toggle" data-bs-toggle="dropdown" data-delay="1000" data-close-others="true">@Model.GetShownLoginName() <i class="fa fa-angle-down"></i></button>
                                 <ul class="dropdown-menu" role="menu">
                                     <li class="language-menu-item">
                                         <a href="@Url.Action("Logout", "Account")"><i class="icon-logout"></i> <span>@L("Logout")</span></a>
@@ -64,12 +74,12 @@
 <div class="header">
     <div class="container">
         <a class="site-logo" href="@Url.Action("Index", "Home")">
-            <img src="@Model.GetLogoUrl(ApplicationPath)" alt="" height="38" />
+            <img src="@Model.GetLogoUrl(ApplicationPath, Model.LogoSkin)" alt="" height="38" />
         </a>
         <a href="javascript:void(0);" class="mobi-toggler"><i class="fa fa-bars" aria-label="@L("Toggle")"></i></a>
         <div class="header-navigation pull-right font-transform-inherit">
             <ul>
-                @foreach (var menuItem in @Model.Menu.Items)
+                @foreach (var menuItem in orderedMenuItems)
                 {
                     @await Html.PartialAsync("Components/Header/_HeaderMenuItem", new HeaderMenuItemViewModel(menuItem, 0, Model.CurrentPageName))
                 }

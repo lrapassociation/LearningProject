@@ -3,6 +3,7 @@ export class AppMenuItem {
     permissionName = '';
     icon = '';
     route = '';
+    routeTemplates = [];
     items: AppMenuItem[];
     external: boolean;
     requiresAuthentication: boolean;
@@ -14,6 +15,7 @@ export class AppMenuItem {
         permissionName: string,
         icon: string,
         route: string,
+        routeTemplates?: string[],
         items?: AppMenuItem[],
         external?: boolean,
         parameters?: Object,
@@ -24,6 +26,7 @@ export class AppMenuItem {
         this.permissionName = permissionName;
         this.icon = icon;
         this.route = route;
+        this.routeTemplates = routeTemplates;
         this.external = external;
         this.parameters = parameters;
         this.featureDependency = featureDependency;

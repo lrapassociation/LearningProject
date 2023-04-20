@@ -7,18 +7,14 @@ export class NgxBootstrapDatePickerConfigService {
 
     static getDaterangepickerConfig(): BsDaterangepickerConfig {
         return Object.assign(new BsDaterangepickerConfig(), {
-            containerClass: 'theme-' + NgxBootstrapDatePickerConfigService.getTheme()
+            containerClass: 'theme-default'
         });
     }
 
     static getDatepickerConfig(): BsDatepickerConfig {
         return Object.assign(new BsDatepickerConfig(), {
-            containerClass: 'theme-' + NgxBootstrapDatePickerConfigService.getTheme()
+            containerClass: 'theme-default'
         });
-    }
-
-    static getTheme(): string {
-        return ThemeHelper.getTheme();
     }
 
     static getDatepickerLocale(): BsLocaleService {
@@ -36,7 +32,7 @@ export class NgxBootstrapDatePickerConfigService {
         let moduleLocaleName = new NgxBootstrapLocaleMappingService().getModuleName(abp.localization.currentLanguage.name);
 
         return new Promise<boolean>((resolve, reject) => {
-            import(`ngx-bootstrap/chronos/esm5/i18n/${supportedLocale}.js`)
+            import(`/node_modules/ngx-bootstrap/chronos/esm2020/i18n/${supportedLocale}.mjs`)
                 .then(module => {
                     defineLocale(abp.localization.currentLanguage.name.toLowerCase(), module[`${moduleLocaleName}Locale`]);
                     resolve(true);

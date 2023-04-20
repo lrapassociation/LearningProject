@@ -8,14 +8,12 @@ import { InvoiceDto, InvoiceServiceProxy } from '@shared/service-proxies/service
 @Component({
     templateUrl: './invoice.component.html',
     styleUrls: ['./invoice.component.less'],
-    animations: [appModuleAnimation()]
+    animations: [appModuleAnimation()],
 })
-
 export class InvoiceComponent extends AppComponentBase implements OnInit {
-
     paymentId = 0;
     invoiceInfo: InvoiceDto = new InvoiceDto();
-    companyLogo = AppConsts.appBaseUrl + '/assets/common/images/app-logo-on-light.svg';
+    companyLogo = '';
 
     constructor(
         injector: Injector,
@@ -27,15 +25,16 @@ export class InvoiceComponent extends AppComponentBase implements OnInit {
 
     ngOnInit(): void {
         this.getAllInfo();
+        const skin = this.currentTheme.baseSettings.layout.darkMode ? 'dark': 'light';
+        this.companyLogo = AppConsts.appBaseUrl + '/assets/common/images/app-logo-on-'+ skin +'.svg';
     }
 
     getAllInfo(): void {
-
         this.activatedRoute.params.subscribe((params: Params) => {
             this.paymentId = params['paymentId'];
         });
 
-        this._invoiceServiceProxy.getInvoiceInfo(this.paymentId).subscribe(result => {
+        this._invoiceServiceProxy.getInvoiceInfo(this.paymentId).subscribe((result) => {
             this.invoiceInfo = result;
         });
     }

@@ -38,7 +38,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CoreOSR.GraphQL", "src\Core
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CoreOSR.GraphQL.Tests", "test\CoreOSR.GraphQL.Tests\CoreOSR.GraphQL.Tests.csproj", "{E09101B3-F77E-4C72-8465-7B430FA93AD1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreOSR.Test.Base", "test\CoreOSR.Test.Base\CoreOSR.Test.Base.csproj", "{62EC592B-CC95-43C2-9736-0EC6E46B01FA}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CoreOSR.Test.Base", "test\CoreOSR.Test.Base\CoreOSR.Test.Base.csproj", "{62EC592B-CC95-43C2-9736-0EC6E46B01FA}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

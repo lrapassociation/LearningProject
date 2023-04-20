@@ -2,18 +2,24 @@ import { Component, EventEmitter, Injector, Output, ViewChild } from '@angular/c
 import { AppConsts } from '@shared/AppConsts';
 import { AppComponentBase } from '@shared/common/app-component-base';
 import { NameValueDto, PagedResultDtoOfNameValueDto } from '@shared/service-proxies/service-proxies';
-import { ModalDirective } from 'ngx-bootstrap';
-import { LazyLoadEvent } from 'primeng/components/common/lazyloadevent';
-import { Paginator } from 'primeng/components/paginator/paginator';
-import { Table } from 'primeng/components/table/table';
+import { ModalDirective } from 'ngx-bootstrap/modal';
+import { LazyLoadEvent } from 'primeng/api';
+import { Paginator } from 'primeng/paginator';
+import { Table } from 'primeng/table';
 import { Observable } from 'rxjs';
-import * as _ from 'lodash';
+import { merge as _merge } from 'lodash-es';
 import { finalize } from 'rxjs/operators';
 
 export interface ICommonLookupModalOptions {
     title?: string;
     isFilterEnabled?: boolean;
-    dataSource: (skipCount: number, maxResultCount: number, filter: string, tenantId?: number) => Observable<PagedResultDtoOfNameValueDto>;
+    dataSource: (
+        skipCount: number,
+        maxResultCount: number,
+        filter: string,
+        tenantId?: number,
+        excludeCurrentUser?: boolean
+    ) => Observable<PagedResultDtoOfNameValueDto>;
     canSelect?: (item: NameValueDto) => boolean | Observable<boolean>;
     loadOnStartup?: boolean;
     pageSize?: number;
@@ -23,44 +29,49 @@ export interface ICommonLookupModalOptions {
 
 @Component({
     selector: 'commonLookupModal',
-    templateUrl: './common-lookup-modal.component.html'
+    templateUrl: './common-lookup-modal.component.html',
 })
 export class CommonLookupModalComponent extends AppComponentBase {
-
     static defaultOptions: ICommonLookupModalOptions = {
         dataSource: undefined,
         canSelect: () => true,
         loadOnStartup: true,
         isFilterEnabled: true,
-        pageSize: AppConsts.grid.defaultPageSize
+        pageSize: AppConsts.grid.defaultPageSize,
     };
 
     @Output() itemSelected: EventEmitter<NameValueDto> = new EventEmitter<NameValueDto>();
 
-    @ViewChild('modal', {static: true}) modal: ModalDirective;
-    @ViewChild('dataTable', {static: true}) dataTable: Table;
-    @ViewChild('paginator', {static: true}) paginator: Paginator;
+    @ViewChild('modal', { static: true }) modal: ModalDirective;
+    @ViewChild('dataTable', { static: true }) dataTable: Table;
+    @ViewChild('paginator', { static: true }) paginator: Paginator;
 
-    options: ICommonLookupModalOptions = _.merge({});
+    options: ICommonLookupModalOptions = _merge({});
 
     isShown = false;
     isInitialized = false;
     filterText = '';
+    excludeCurrentUser = true;
     tenantId?: number;
 
-    constructor(
-        injector: Injector
-    ) {
+    constructor(injector: Injector) {
         super(injector);
     }
 
     configure(options: ICommonLookupModalOptions): void {
-        this.options = _.merge({}, CommonLookupModalComponent.defaultOptions, { title: this.l('SelectAnItem') }, options);
+        this.options = _merge(
+            {},
+            CommonLookupModalComponent.defaultOptions,
+            { title: this.l('SelectAnItem') },
+            options
+        );
     }
 
     show(): void {
         if (!this.options) {
-            throw Error('Should call CommonLookupModalComponent.configure once before CommonLookupModalComponent.show!');
+            throw Error(
+                'Should call CommonLookupModalComponent.configure once before CommonLookupModalComponent.show!'
+            );
         }
 
         this.modal.show();
@@ -98,15 +109,17 @@ export class CommonLookupModalComponent extends AppComponentBase {
         if (this.primengTableHelper.shouldResetPaging(event)) {
             this.paginator.changePage(0);
 
-            return;
+            if (this.primengTableHelper.records && this.primengTableHelper.records.length > 0) {
+                return;
+            }
         }
 
         this.primengTableHelper.showLoadingIndicator();
 
         this.options
-            .dataSource(skipCount, maxResultCount, this.filterText, this.tenantId)
+            .dataSource(skipCount, maxResultCount, this.filterText, this.tenantId, this.excludeCurrentUser)
             .pipe(finalize(() => this.primengTableHelper.hideLoadingIndicator()))
-            .subscribe(result => {
+            .subscribe((result) => {
                 this.primengTableHelper.totalRecordsCount = result.totalCount;
                 this.primengTableHelper.records = result.items;
                 this.primengTableHelper.hideLoadingIndicator();
@@ -126,12 +139,11 @@ export class CommonLookupModalComponent extends AppComponentBase {
         }
 
         //assume as observable
-        (boolOrPromise as Observable<boolean>)
-            .subscribe(result => {
-                if (result) {
-                    this.itemSelected.emit(item);
-                    this.close();
-                }
-            });
+        (boolOrPromise as Observable<boolean>).subscribe((result) => {
+            if (result) {
+                this.itemSelected.emit(item);
+                this.close();
+            }
+        });
     }
 }

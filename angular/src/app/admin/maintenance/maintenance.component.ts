@@ -1,18 +1,17 @@
 import { Component, Injector, OnInit } from '@angular/core';
 import { appModuleAnimation } from '@shared/animations/routerTransition';
 import { AppComponentBase } from '@shared/common/app-component-base';
-import { CachingServiceProxy, EntityDtoOfString, WebLogServiceProxy } from '@shared/service-proxies/service-proxies';
+import { CachingServiceProxy, EntityDtoOfString, NotificationServiceProxy, WebLogServiceProxy } from '@shared/service-proxies/service-proxies';
 import { FileDownloadService } from '@shared/utils/file-download.service';
-import * as _ from 'lodash';
+import { escape as _escape } from 'lodash-es';
 import { finalize } from 'rxjs/operators';
 
 @Component({
     templateUrl: './maintenance.component.html',
     styleUrls: ['./maintenance.component.less'],
-    animations: [appModuleAnimation()]
+    animations: [appModuleAnimation()],
 })
 export class MaintenanceComponent extends AppComponentBase implements OnInit {
-
     loading = false;
     caches: any = null;
     logs: any = '';
@@ -21,15 +20,32 @@ export class MaintenanceComponent extends AppComponentBase implements OnInit {
         injector: Injector,
         private _cacheService: CachingServiceProxy,
         private _webLogService: WebLogServiceProxy,
-        private _fileDownloadService: FileDownloadService) {
+        private _fileDownloadService: FileDownloadService,
+        private _notificationService: NotificationServiceProxy
+    ) {
         super(injector);
+    }
+
+    sendNewVersionAvailableNotification(): void {
+        abp.message.confirm(this.l('SendNewVersionNotificationWarningMessage'), null, (isConfirmed) => {
+            if (isConfirmed){
+                this._notificationService.createNewVersionReleasedNotification().subscribe(result => {
+                    abp.notify.info(this.l('SuccessfullySentNewVersionNotification'));
+                });
+            }
+        });
     }
 
     getCaches(): void {
         const self = this;
         self.loading = true;
-        self._cacheService.getAllCaches()
-            .pipe(finalize(() => { self.loading = false; }))
+        self._cacheService
+            .getAllCaches()
+            .pipe(
+                finalize(() => {
+                    self.loading = false;
+                })
+            )
             .subscribe((result) => {
                 self.caches = result.items;
             });
@@ -68,25 +84,24 @@ export class MaintenanceComponent extends AppComponentBase implements OnInit {
     };
 
     getLogClass(log: string): string {
-
         if (log.startsWith('DEBUG')) {
-            return 'kt-badge kt-badge--inline kt-badge--dark';
+            return 'badge badge-dark';
         }
 
         if (log.startsWith('INFO')) {
-            return 'kt-badge kt-badge--inline kt-badge--info';
+            return 'badge badge-info';
         }
 
         if (log.startsWith('WARN')) {
-            return 'kt-badge kt-badge--inline kt-badge--warning';
+            return 'badge badge-warning';
         }
 
         if (log.startsWith('ERROR')) {
-            return 'kt-badge kt-badge--inline kt-badge--danger';
+            return 'badge badge-danger';
         }
 
         if (log.startsWith('FATAL')) {
-            return 'kt-badge kt-badge--inline kt-badge--danger';
+            return 'badge badge-danger';
         }
 
         return '';
@@ -117,7 +132,7 @@ export class MaintenanceComponent extends AppComponentBase implements OnInit {
     }
 
     getRawLogContent(log: string): string {
-        return _.escape(log)
+        return _escape(log)
             .replace('DEBUG', '')
             .replace('INFO', '')
             .replace('WARN', '')
@@ -131,7 +146,7 @@ export class MaintenanceComponent extends AppComponentBase implements OnInit {
         const panelHeight = panel.clientHeight;
         const difference = windowHeight - panelHeight;
         const fixedHeight = panelHeight + difference;
-        (panel as any).style.height = (fixedHeight - 420) + 'px';
+        (panel as any).style.height = fixedHeight - 420 + 'px';
     }
 
     onResize(event): void {

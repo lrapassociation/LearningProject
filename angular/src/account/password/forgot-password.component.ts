@@ -8,27 +8,31 @@ import { finalize } from 'rxjs/operators';
 
 @Component({
     templateUrl: './forgot-password.component.html',
-    animations: [accountModuleAnimation()]
+    animations: [accountModuleAnimation()],
 })
 export class ForgotPasswordComponent extends AppComponentBase {
-
     model: SendPasswordResetCodeInput = new SendPasswordResetCodeInput();
 
     saving = false;
 
-    constructor (
+    constructor(
         injector: Injector,
         private _accountService: AccountServiceProxy,
         private _appUrlService: AppUrlService,
         private _router: Router
-        ) {
+    ) {
         super(injector);
     }
 
     save(): void {
         this.saving = true;
-        this._accountService.sendPasswordResetCode(this.model)
-            .pipe(finalize(() => { this.saving = false; }))
+        this._accountService
+            .sendPasswordResetCode(this.model)
+            .pipe(
+                finalize(() => {
+                    this.saving = false;
+                })
+            )
             .subscribe(() => {
                 this.message.success(this.l('PasswordResetMailSentMessage'), this.l('MailSent')).then(() => {
                     this._router.navigate(['account/login']);

@@ -1,18 +1,78 @@
+import { NameValuePair } from '@shared/utils/name-value-pair';
 import { IThemeAssetContributor } from '../ThemeAssetContributor';
-import { ThemeHelper } from '@app/shared/layout/themes/ThemeHelper';
-import * as rtlDetect from 'rtl-detect';
+import { ThemeHelper } from '../ThemeHelper';
 import { AppConsts } from '@shared/AppConsts';
 
 export class DefaultThemeAssetContributor implements IThemeAssetContributor {
-    getAssetUrls(): string[] {
-        let asideSkin = ThemeHelper.getAsideSkin();
-        let headerSkin = ThemeHelper.getHeaderSkin();
-        const isRtl = rtlDetect.isRtlLang(abp.localization.currentLanguage.name);
+    public getAssetUrls(): string[] {
+        return [AppConsts.appBaseUrl + '/assets/fonts/fonts-poppins.min.css'];
+    }
 
-        return [
-            AppConsts.appBaseUrl + '/assets/metronic/themes/default/css/skins/header/base/' + headerSkin + (isRtl ? '.rtl' : '') + '.min.css',
-            AppConsts.appBaseUrl + '/assets/metronic/themes/default/css/skins/brand/' + asideSkin + (isRtl ? '.rtl' : '') + '.min.css',
-            AppConsts.appBaseUrl + '/assets/metronic/themes/default/css/skins/aside/' + asideSkin + (isRtl ? '.rtl' : '') + '.min.css'
+    public getMenuWrapperStyle(): string {
+        return 'header-menu-wrapper header-menu-wrapper-left';
+    }
+
+    public getSubheaderStyle(): string {
+        return 'text-dark fw-bold my-1 me-5';
+    }
+
+    public getFooterStyle(): string {
+        return 'footer py-4 d-flex flex-lg-column';
+    }
+
+    getBodyAttributes(): NameValuePair[] {
+        const skin = ThemeHelper.getAsideSkin();
+        return [{
+            name: 'data-kt-app-layout',
+            value: skin + '-sidebar'
+        }, {
+            name: 'data-kt-app-header-fixed',
+            value: ThemeHelper.getDesktopFixedHeader()
+        },
+        {
+            name: 'data-kt-app-header-fixed-mobile',
+            value: ThemeHelper.getMobileFixedHeader()
+        },
+        {
+            name: 'data-kt-app-sidebar-enabled',
+            value: 'true'
+        },
+        {
+            name: 'data-kt-app-sidebar-fixed',
+            value: ThemeHelper.getFixedAside()
+        },
+        {
+            name: 'data-kt-app-sidebar-hoverable',
+            value: ThemeHelper.getHoverableAside()
+        },
+        {
+            name: 'data-kt-app-sidebar-push-header',
+            value: 'true'
+        },
+        {
+            name: 'data-kt-app-toolbar-enabled',
+            value: 'true'
+        },
+        {
+            name: 'data-kt-app-sidebar-push-toolbar',
+            value: 'true'
+        },
+        {
+            name: 'data-kt-app-sidebar-push-footer',
+            value: 'true'
+        },
+        {
+            name: 'data-kt-app-toolbar-enabled',
+            value: 'true'
+        },
+        {
+            name: 'data-kt-app-sidebar-minimize',
+            value: ThemeHelper.getDefaultMinimizedAside() === 'true' ? 'on' : 'off'
+        }
         ];
+    }
+
+    getAppModuleBodyClass(): string {
+        return 'app-default';
     }
 }

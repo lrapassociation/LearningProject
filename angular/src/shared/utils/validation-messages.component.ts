@@ -1,6 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { AppLocalizationService } from '@app/shared/common/localization/app-localization.service';
-import * as _ from 'lodash';
+import { filter as _filter, find as _find, concat as _concat } from 'lodash-es';
 
 class ErrorDef {
     error: string;
@@ -10,41 +10,53 @@ class ErrorDef {
 
 @Component({
     selector: '<validation-messages>',
-    template: `<div class="has-danger" *ngIf="formCtrl.invalid && (formCtrl.dirty || formCtrl.touched)">
-                    <div *ngFor="let errorDef of errorDefsInternal">
-                        <div *ngIf="getErrorDefinitionIsInValid(errorDef)" class="form-control-feedback">
-                            {{getErrorDefinitionMessage(errorDef)}}
-                        </div>
-                    </div>
-               </div>`
+    template: `
+        <div class="has-danger" *ngIf="formCtrl.invalid && (formCtrl.dirty || formCtrl.touched)">
+            <div *ngFor="let errorDef of errorDefsInternal">
+                <div *ngIf="getErrorDefinitionIsInValid(errorDef)" class="form-control-feedback">
+                    {{ getErrorDefinitionMessage(errorDef) }}
+                </div>
+            </div>
+        </div>
+    `,
 })
 export class ValidationMessagesComponent {
+    @Input() formCtrl;
 
     _errorDefs: ErrorDef[] = [];
 
-    @Input() formCtrl;
-    @Input() set errorDefs(value: ErrorDef[]) {
-        this._errorDefs = value;
-    }
-
     readonly standartErrorDefs: ErrorDef[] = [
         { error: 'required', localizationKey: 'ThisFieldIsRequired' } as ErrorDef,
-        { error: 'minlength', localizationKey: 'PleaseEnterAtLeastNCharacter', errorProperty: 'requiredLength' } as ErrorDef,
-        { error: 'maxlength', localizationKey: 'PleaseEnterNoMoreThanNCharacter', errorProperty: 'requiredLength' } as ErrorDef,
+        {
+            error: 'minlength',
+            localizationKey: 'PleaseEnterAtLeastNCharacter',
+            errorProperty: 'requiredLength',
+        } as ErrorDef,
+        {
+            error: 'maxlength',
+            localizationKey: 'PleaseEnterNoMoreThanNCharacter',
+            errorProperty: 'requiredLength',
+        } as ErrorDef,
         { error: 'email', localizationKey: 'InvalidEmailAddress' } as ErrorDef,
-        { error: 'pattern', localizationKey: 'InvalidPattern', errorProperty: 'requiredPattern' } as ErrorDef
+        { error: 'min', localizationKey: 'ValueMustBeBiggerThanOrEqualToX', errorProperty: 'min' } as ErrorDef,
+        { error: 'pattern', localizationKey: 'InvalidPattern', errorProperty: 'requiredPattern' } as ErrorDef,
     ];
 
+    constructor(private appLocalizationService: AppLocalizationService) {}
+
     get errorDefsInternal(): ErrorDef[] {
-        let standarts = _.filter(this.standartErrorDefs, (ed) => !_.find(this._errorDefs, (edC) => edC.error === ed.error));
-        let all = <ErrorDef[]>_.concat(standarts, this._errorDefs);
+        let standarts = _filter(
+            this.standartErrorDefs,
+            (ed) => !_find(this._errorDefs, (edC) => edC.error === ed.error)
+        );
+        let all = <ErrorDef[]>_concat(standarts, this._errorDefs);
 
         return all;
     }
 
-    constructor(
-        private appLocalizationService: AppLocalizationService
-    ) { }
+    @Input() set errorDefs(value: ErrorDef[]) {
+        this._errorDefs = value;
+    }
 
     getErrorDefinitionIsInValid(errorDef: ErrorDef): boolean {
         return !!this.formCtrl.errors[errorDef.error];
@@ -57,4 +69,3 @@ export class ValidationMessagesComponent {
             : this.appLocalizationService.l(errorDef.localizationKey);
     }
 }
-

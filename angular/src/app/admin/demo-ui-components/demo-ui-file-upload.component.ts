@@ -7,18 +7,13 @@ import { DemoUiComponentsServiceProxy } from '@shared/service-proxies/service-pr
 @Component({
     selector: 'demo-ui-file-upload',
     templateUrl: './demo-ui-file-upload.component.html',
-    animations: [appModuleAnimation()]
+    animations: [appModuleAnimation()],
 })
-
 export class DemoUiFileUploadComponent extends AppComponentBase {
-
     uploadUrl: string;
     uploadedFiles: any[] = [];
 
-    constructor(
-        injector: Injector,
-        private demoUiComponentsService: DemoUiComponentsServiceProxy
-    ) {
+    constructor(injector: Injector, private demoUiComponentsService: DemoUiComponentsServiceProxy) {
         super(injector);
         this.uploadUrl = AppConsts.remoteServiceBaseUrl + '/DemoUiComponents/UploadFiles';
     }

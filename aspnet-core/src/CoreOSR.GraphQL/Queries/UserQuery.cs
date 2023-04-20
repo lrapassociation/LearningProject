@@ -19,6 +19,7 @@ using CoreOSR.Core.Base;
 using CoreOSR.Dto;
 using CoreOSR.Types;
 using CoreOSR.Core.Extensions;
+using GraphQL;
 
 namespace CoreOSR.Queries
 {
@@ -68,7 +69,7 @@ namespace CoreOSR.Queries
         }
 
         [AbpAuthorize(AppPermissions.Pages_Administration_Users)]
-        protected override async Task<PagedResultDto<UserDto>> Resolve(ResolveFieldContext<object> context)
+        public override async Task<PagedResultDto<UserDto>> Resolve(IResolveFieldContext context)
         {
             var query = _userManager.Users.AsNoTracking();
 
@@ -87,7 +88,7 @@ namespace CoreOSR.Queries
             return new PagedResultDto<UserDto>(totalCount, userDtos);
         }
 
-        private static async Task<List<User>> FetchUsers(IQueryable<User> query, ResolveFieldContext<object> context)
+        private static async Task<List<User>> FetchUsers(IQueryable<User> query, IResolveFieldContext context)
         {
             return await query
                 .OrderBy(context.GetArgument(Args.Sorting, "Name,Surname"))
@@ -96,7 +97,7 @@ namespace CoreOSR.Queries
                 .ToListAsync();
         }
 
-        private async Task IncludeDetails(ResolveFieldContext<object> context, List<User> users, List<UserDto> userDtos)
+        private async Task IncludeDetails(IResolveFieldContext context, List<User> users, List<UserDto> userDtos)
         {
             if (context.HasSelectionField(UserType.ChildFields.GetFieldSelector(UserType.ChildFields.Roles)))
             {
@@ -163,15 +164,15 @@ namespace CoreOSR.Queries
 
             //TODO: Try to reduce to single query
 
-            var userOrgUnits = await _userOrganizationUnitRepository
-                .GetAll()
-                .Where(x => userIdList.Contains(x.UserId))
+            var userOrgUnits = (await _userOrganizationUnitRepository.GetAll().Where(x => userIdList.Contains(x.UserId))
+                .Select(u => new { u.UserId, u.OrganizationUnitId }).ToListAsync()
+                )
                 .GroupBy(x => x.UserId)
                 .Select(x => new
                 {
                     UserId = x.Key,
                     OrganizationUnitIds = x.Select(y => y.OrganizationUnitId).ToList()
-                }).ToListAsync();
+                }).ToList();
 
             var distinctOrgUnitIds = new List<long>();
             foreach (var organizationUnitsOfUser in userOrgUnits)
@@ -194,7 +195,7 @@ namespace CoreOSR.Queries
             }).ToList();
         }
 
-        private static IQueryable<User> IncludeQuery(IQueryable<User> query, ResolveFieldContext<object> context)
+        private static IQueryable<User> IncludeQuery(IQueryable<User> query, IResolveFieldContext context)
         {
             if (context.HasSelectionField(UserType.ChildFields.GetFieldSelector(UserType.ChildFields.Roles)))
             {
@@ -209,7 +210,7 @@ namespace CoreOSR.Queries
             return query;
         }
 
-        private static IQueryable<User> FilterQuery(IQueryable<User> query, ResolveFieldContext<object> context)
+        private static IQueryable<User> FilterQuery(IQueryable<User> query, IResolveFieldContext context)
         {
             context
                 .ContainsArgument<long>(Args.Id,

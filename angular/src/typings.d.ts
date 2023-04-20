@@ -1,21 +1,20 @@
 ///<reference path="../node_modules/abp-web-resources/Abp/Framework/scripts/abp.d.ts"/>
 ///<reference path="../node_modules/abp-web-resources/Abp/Framework/scripts/libs/abp.jquery.d.ts"/>
 ///<reference path="../node_modules/abp-web-resources/Abp/Framework/scripts/libs/abp.signalr.d.ts"/>
-///<reference path="../node_modules/moment/moment.d.ts"/>
-///<reference path="../node_modules/@types/moment-timezone/index.d.ts"/>
 
 // Typings reference file, see links for more information
 // https://github.com/typings/typings
 // https://www.typescriptlang.org/docs/handbook/writing-declaration-files.html
 
-declare var System: any;
+declare let System: any;
 
-declare var KTOffcanvas: any; // Related to Metronic
-declare var KTMenu: any; // Related to Metronic
-declare var KTToggle: any; // Related to Metronic
-declare var KTUtil: any; // Related to Metronic
-declare var KTHeader: any; // Related to Metronic
-declare var StripeCheckout: any;
+declare let KTOffcanvas: any; // Related to Metronic
+declare let KTMenu: any; // Related to Metronic
+declare let KTToggle: any; // Related to Metronic
+declare let KTUtil: any; // Related to Metronic
+declare let KTHeader: any; // Related to Metronic
+declare let KTScrolltop: any; // Related to Metronic
+declare let StripeCheckout: any;
 
 declare namespace abp {
     namespace ui {

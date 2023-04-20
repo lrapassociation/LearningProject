@@ -1,4 +1,5 @@
 ﻿using Abp.Runtime.Caching;
+using CoreOSR.Authentication.TwoFactor;
 
 namespace CoreOSR.Web.Authentication.TwoFactor
 {

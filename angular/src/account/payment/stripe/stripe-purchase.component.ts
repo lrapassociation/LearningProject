@@ -3,26 +3,24 @@ import { Router, ActivatedRoute } from '@angular/router';
 import { AppComponentBase } from '@shared/common/app-component-base';
 import { ScriptLoaderService } from '@shared/utils/script-loader.service';
 import { accountModuleAnimation } from '@shared/animations/routerTransition';
-import { XmlHttpRequestHelper } from '@shared/helpers/XmlHttpRequestHelper';
-import { TenantRegistrationHelperService } from '@account/register/tenant-registration-helper.service';
 
 import {
     StripePaymentServiceProxy,
-    StripeConfirmPaymentInput,
     PaymentServiceProxy,
     SubscriptionPaymentDto,
     StripeConfigurationDto,
     SubscriptionPaymentGatewayType,
     SubscriptionStartType,
-    EditionPaymentType
+    EditionPaymentType,
+    StripeCreatePaymentSessionInput,
 } from '@shared/service-proxies/service-proxies';
+import { AppConsts } from '@shared/AppConsts';
 
 @Component({
     selector: 'stripe-purchase-component',
     templateUrl: './stripe-purchase.component.html',
-    animations: [accountModuleAnimation()]
+    animations: [accountModuleAnimation()],
 })
-
 export class StripePurchaseComponent extends AppComponentBase implements OnInit {
     @Input() editionPaymentType: EditionPaymentType;
 
@@ -37,91 +35,80 @@ export class StripePurchaseComponent extends AppComponentBase implements OnInit 
     paymentId;
     successCallbackUrl;
     errorCallbackUrl;
-    redirectUrl = '';
 
     constructor(
         injector: Injector,
         private _activatedRoute: ActivatedRoute,
         private _stripePaymentAppService: StripePaymentServiceProxy,
-        private _paymentAppService: PaymentServiceProxy,
-        private _router: Router,
-        private _tenantRegistrationHelper: TenantRegistrationHelperService
+        private _paymentAppService: PaymentServiceProxy
     ) {
         super(injector);
     }
 
     ngOnInit(): void {
+        this.spinnerService.show();
+
+        this.setTenantIdCookieIfNeeded();
+
+        this.stripeIsLoading = true;
         this.paymentId = this._activatedRoute.snapshot.queryParams['paymentId'];
-        this.redirectUrl = this._activatedRoute.snapshot.queryParams['redirectUrl'];
-        let isUpgrade = this._activatedRoute.snapshot.queryParams['isUpgrade'];
 
-        new ScriptLoaderService().load('https://checkout.stripe.com/checkout.js').then(() => {
-            this._paymentAppService.getPayment(this.paymentId)
-                .subscribe((result: SubscriptionPaymentDto) => {
-                    this.amount = result.amount;
-                    this.description = result.description;
-                    this.successCallbackUrl = result.successUrl;
-                    this.errorCallbackUrl = result.errorUrl;
+        new ScriptLoaderService()
+            .load('https://js.stripe.com/v3')
+            .then(() => {
+                this._stripePaymentAppService.getConfiguration().subscribe(
+                    (config: StripeConfigurationDto) => {
+                        this._stripePaymentAppService
+                            .createPaymentSession(
+                                new StripeCreatePaymentSessionInput({
+                                    paymentId: this.paymentId,
+                                    successUrl: AppConsts.appBaseUrl + '/account/stripe-payment-result',
+                                    cancelUrl: AppConsts.appBaseUrl + '/account/stripe-cancel-payment',
+                                })
+                            )
+                            .subscribe(
+                                (sessionId) => {
+                                    this._paymentAppService.getPayment(this.paymentId).subscribe(
+                                        (result: SubscriptionPaymentDto) => {
+                                            this.spinnerService.hide();
+                                            this.amount = result.amount;
+                                            this.description = result.description;
+                                            this.successCallbackUrl = result.successUrl;
+                                            this.errorCallbackUrl = result.errorUrl;
+                                            let stripe = (<any>window).Stripe(config.publishableKey);
+                                            let checkoutButton = document.getElementById('stripe-checkout');
+                                            checkoutButton.addEventListener('click', function () {
+                                                stripe.redirectToCheckout({ sessionId: sessionId });
+                                            });
 
-                    if (!result.isRecurring) {
-                        this._stripePaymentAppService.getConfiguration()
-                            .subscribe((config: StripeConfigurationDto) => {
-                                this.prepareStripeButton(config.publishableKey);
-                                this.stripeIsLoading = false;
-                            });
-                    } else {
-                        let route = isUpgrade ? 'account/stripe-update-subscription' : 'account/stripe-subscribe';
-                        this._router.navigate([route], {
-                            queryParams: {
-                                paymentId: this.paymentId,
-                                redirectUrl: this.redirectUrl
-                            }
-                        });
+                                            this.stripeIsLoading = false;
+                                        },
+                                        (err) => {
+                                            this.spinnerService.hide();
+                                        }
+                                    );
+                                },
+                                (err) => {
+                                    this.spinnerService.hide();
+                                }
+                            );
+                    },
+                    (err) => {
+                        this.spinnerService.hide();
                     }
-                });
-        });
+                );
+            })
+            .catch((err) => {
+                this.spinnerService.hide();
+            });
     }
 
-    prepareStripeButton(stripeKey: string): void {
-        let handler = StripeCheckout.configure({
-            key: stripeKey,
-            locale: 'auto',
-            currency: this.appSession.application.currency,
-            token: token => {
-                abp.ui.setBusy();
+    setTenantIdCookieIfNeeded(): void {
+        if (!this._activatedRoute.snapshot.queryParams['tenantId']) {
+            return;
+        }
 
-                let input = new StripeConfirmPaymentInput();
-                input.paymentId = this.paymentId;
-                input.stripeToken = token.id;
-
-                this._stripePaymentAppService.confirmPayment(input).subscribe(() => {
-                    XmlHttpRequestHelper.ajax('POST',
-                        this.successCallbackUrl + (this.successCallbackUrl.indexOf('?') >= 0 ? '&' : '?') + 'paymentId=' + this.paymentId,
-                        null,
-                        null,
-                        (result) => {
-                            if (this._tenantRegistrationHelper.registrationResult) {
-                                this._tenantRegistrationHelper.registrationResult.isActive = true;
-                            }
-
-                            abp.ui.clearBusy();
-                            this._router.navigate([this.redirectUrl]);
-                        });
-                });
-            }
-        });
-
-        document.getElementById('stripe-checkout').addEventListener('click', e => {
-            handler.open({
-                name: 'CoreOSR',
-                description: this.description,
-                amount: this.amount * 100
-            });
-            e.preventDefault();
-        });
-
-        window.addEventListener('popstate', () => {
-            handler.close();
-        });
+        let tenantId = parseInt(this._activatedRoute.snapshot.queryParams['tenantId']);
+        abp.multiTenancy.setTenantIdCookie(tenantId);
     }
 }

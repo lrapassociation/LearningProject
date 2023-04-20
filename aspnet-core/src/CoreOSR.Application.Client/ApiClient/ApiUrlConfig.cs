@@ -5,7 +5,7 @@ namespace CoreOSR.ApiClient
 {
     public static class ApiUrlConfig
     {
-        private const string DefaultHostUrl = "http://localhost:22742/"; //TODO: Replace with PROD url.
+        private const string DefaultHostUrl = "https://localhost:44301/"; //TODO: Replace with PROD WebAPI URL.
 
         public static string BaseUrl { get; private set; }
 
@@ -28,7 +28,7 @@ namespace CoreOSR.ApiClient
 
         private static string NormalizeUrl(string baseUrl)
         {
-            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uriResult) || 
+            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uriResult) ||
                 (uriResult.Scheme != "http" && uriResult.Scheme != "https"))
             {
                 throw new ArgumentException("Unexpected base URL: " + baseUrl);

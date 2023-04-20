@@ -5,13 +5,14 @@ import { AppComponentBase } from '@shared/common/app-component-base';
 import { AppUrlService } from '@shared/common/nav/app-url.service';
 import { RegisterTenantOutput } from '@shared/service-proxies/service-proxies';
 import { TenantRegistrationHelperService } from './tenant-registration-helper.service';
+import { SubdomainTenancyNameFinder } from '@shared/helpers/SubdomainTenancyNameFinder';
+import { AppConsts } from '@shared/AppConsts';
 
 @Component({
     templateUrl: './register-tenant-result.component.html',
-    animations: [accountModuleAnimation()]
+    animations: [accountModuleAnimation()],
 })
 export class RegisterTenantResultComponent extends AppComponentBase implements OnInit {
-
     model: RegisterTenantOutput = new RegisterTenantOutput();
     tenantUrl: string;
 
@@ -33,7 +34,10 @@ export class RegisterTenantResultComponent extends AppComponentBase implements O
         }
 
         this.model = this._tenantRegistrationHelper.registrationResult;
-        abp.multiTenancy.setTenantIdCookie(this.model.tenantId);
+        if (!new SubdomainTenancyNameFinder().urlHasTenancyNamePlaceholder(AppConsts.remoteServiceBaseUrlFormat)) {
+            abp.multiTenancy.setTenantIdCookie(this.model.tenantId);
+        }
+
         this.tenantUrl = this._appUrlService.getAppRootUrlOfTenant(this.model.tenancyName);
     }
 }

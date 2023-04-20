@@ -61,8 +61,18 @@ namespace CoreOSR.Timing
                 .Select(tz => new NameValueDto
                 {
                     Value = tz,
-                    Name = tz
-                }).ToList();
+                    Name = TZConvert.WindowsToIana(tz) + " (" + GetTimezoneOffset(TZConvert.GetTimeZoneInfo(tz)) + ")"
+                }).OrderBy(e=> e.Name).ToList();
+        }
+
+        private string GetTimezoneOffset(TimeZoneInfo timeZoneInfo)
+        {
+            if (timeZoneInfo.BaseUtcOffset < TimeSpan.Zero)
+            {
+                return "-" + timeZoneInfo.BaseUtcOffset.ToString(@"hh\:mm");
+            }
+            
+            return "+" + timeZoneInfo.BaseUtcOffset.ToString(@"hh\:mm");
         }
     }
 }

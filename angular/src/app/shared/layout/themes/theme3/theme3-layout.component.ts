@@ -1,37 +1,31 @@
-import { Injector, ElementRef, Component, OnInit, AfterViewInit, ViewChild, Inject } from '@angular/core';
+import { Injector, ElementRef, Component, OnInit, ViewChild, Inject } from '@angular/core';
 import { appModuleAnimation } from '@shared/animations/routerTransition';
 import { ThemesLayoutBaseComponent } from '@app/shared/layout/themes/themes-layout-base.component';
 import { UrlHelper } from '@shared/helpers/UrlHelper';
-import { Router } from '@angular/router';
-import { DOCUMENT } from '@angular/common';
-import { LayoutRefService } from '@metronic/app/core/_base/layout/services/layout-ref.service';
 import { AppConsts } from '@shared/AppConsts';
+import { DOCUMENT } from '@angular/common';
+import { DateTimeService } from '@app/shared/common/timing/date-time.service';
 
 @Component({
     templateUrl: './theme3-layout.component.html',
     selector: 'theme3-layout',
-    animations: [appModuleAnimation()]
+    animations: [appModuleAnimation()],
 })
-export class Theme3LayoutComponent extends ThemesLayoutBaseComponent implements OnInit, AfterViewInit {
-
-    @ViewChild('ktHeader', {static: true}) ktHeader: ElementRef;
-
-    constructor(
-        injector: Injector,
-        private router: Router,
-        @Inject(DOCUMENT) private document: Document,
-        private layoutRefService: LayoutRefService,
-    ) {
-        super(injector);
-    }
+export class Theme3LayoutComponent extends ThemesLayoutBaseComponent implements OnInit {
+    @ViewChild('ktHeader', { static: true }) ktHeader: ElementRef;
 
     remoteServiceBaseUrl: string = AppConsts.remoteServiceBaseUrl;
 
-    ngOnInit() {
-        this.installationMode = UrlHelper.isInstallUrl(location.href);
+    constructor(injector: Injector, @Inject(DOCUMENT) private document: Document, _dateTimeService: DateTimeService) {
+        super(injector, _dateTimeService);
     }
 
-    ngAfterViewInit(): void {
-        this.layoutRefService.addElement('header', this.ktHeader.nativeElement);
+    ngOnInit() {
+        this.installationMode = UrlHelper.isInstallUrl(location.href);
+        this.defaultLogo = AppConsts.appBaseUrl + '/assets/common/images/app-logo-on-light-sm.svg';
+    }
+
+    triggerAsideToggleClickEvent(): void {
+        abp.event.trigger('app.kt_aside_toggler.onClick');
     }
 }

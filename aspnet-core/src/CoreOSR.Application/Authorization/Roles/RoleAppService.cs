@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Abp.Application.Services.Dto;
 using Abp.Authorization;
 using Abp.Zero.Configuration;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CoreOSR.Authorization.Permissions;
 using CoreOSR.Authorization.Permissions.Dto;
@@ -29,6 +30,7 @@ namespace CoreOSR.Authorization.Roles
             _roleManagementConfig = roleManagementConfig;
         }
 
+        [HttpPost]
         public async Task<ListResultDto<RoleListDto>> GetRoles(GetRolesInput input)
         {
             var query = _roleManager.Roles;

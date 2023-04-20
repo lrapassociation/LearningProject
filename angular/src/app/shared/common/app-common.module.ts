@@ -1,12 +1,19 @@
-import { AbpModule } from '@abp/abp.module';
-import * as ngCommon from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { ModuleWithProviders, NgModule } from '@angular/core';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { AppLocalizationService } from '@app/shared/common/localization/app-localization.service';
 import { AppNavigationService } from '@app/shared/layout/nav/app-navigation.service';
-import { CommonModule } from '@shared/common/common.module';
+import { CoreOSRCommonModule } from '@shared/common/common.module';
 import { UtilsModule } from '@shared/utils/utils.module';
-import { BsDatepickerModule, ModalModule } from 'ngx-bootstrap';
+import { ModalModule } from 'ngx-bootstrap/modal';
+import { TabsModule } from 'ngx-bootstrap/tabs';
+import { BsDropdownModule } from 'ngx-bootstrap/dropdown';
+import {
+    BsDatepickerModule,
+    BsDatepickerConfig,
+    BsDaterangepickerConfig,
+    BsLocaleService,
+} from 'ngx-bootstrap/datepicker';
 import { PaginatorModule } from 'primeng/paginator';
 import { TableModule } from 'primeng/table';
 import { AppAuthService } from './auth/app-auth.service';
@@ -18,18 +25,35 @@ import { DateRangePickerInitialValueSetterDirective } from './timing/date-range-
 import { DatePickerInitialValueSetterDirective } from './timing/date-picker-initial-value.directive';
 import { DateTimeService } from './timing/date-time.service';
 import { TimeZoneComboComponent } from './timing/timezone-combo.component';
+import { NgxBootstrapDatePickerConfigService } from 'assets/ngx-bootstrap/ngx-bootstrap-datepicker-config.service';
+import { PerfectScrollbarModule } from 'ngx-perfect-scrollbar';
+import { CountoModule } from 'angular2-counto';
+import { AppBsModalModule } from '@shared/common/appBsModal/app-bs-modal.module';
+import { SingleLineStringInputTypeComponent } from './input-types/single-line-string-input-type/single-line-string-input-type.component';
+import { ComboboxInputTypeComponent } from './input-types/combobox-input-type/combobox-input-type.component';
+import { CheckboxInputTypeComponent } from './input-types/checkbox-input-type/checkbox-input-type.component';
+import { MultipleSelectComboboxInputTypeComponent } from './input-types/multiple-select-combobox-input-type/multiple-select-combobox-input-type.component';
+import { AutoCompleteModule } from 'primeng/autocomplete';
+import { PasswordInputWithShowButtonComponent } from './password-input-with-show-button/password-input-with-show-button.component';
+import { KeyValueListManagerComponent } from './key-value-list-manager/key-value-list-manager.component';
 
 @NgModule({
     imports: [
-        ngCommon.CommonModule,
+        CommonModule,
         FormsModule,
         ReactiveFormsModule,
         ModalModule.forRoot(),
         UtilsModule,
-        AbpModule,
-        CommonModule,
+        CoreOSRCommonModule,
         TableModule,
-        PaginatorModule
+        PaginatorModule,
+        TabsModule.forRoot(),
+        BsDropdownModule.forRoot(),
+        BsDatepickerModule.forRoot(),
+        PerfectScrollbarModule,
+        CountoModule,
+        AppBsModalModule,
+        AutoCompleteModule,
     ],
     declarations: [
         TimeZoneComboComponent,
@@ -37,7 +61,13 @@ import { TimeZoneComboComponent } from './timing/timezone-combo.component';
         EntityTypeHistoryModalComponent,
         EntityChangeDetailModalComponent,
         DateRangePickerInitialValueSetterDirective,
-        DatePickerInitialValueSetterDirective
+        DatePickerInitialValueSetterDirective,
+        SingleLineStringInputTypeComponent,
+        ComboboxInputTypeComponent,
+        CheckboxInputTypeComponent,
+        MultipleSelectComboboxInputTypeComponent,
+        PasswordInputWithShowButtonComponent,
+        KeyValueListManagerComponent,
     ],
     exports: [
         TimeZoneComboComponent,
@@ -45,22 +75,24 @@ import { TimeZoneComboComponent } from './timing/timezone-combo.component';
         EntityTypeHistoryModalComponent,
         EntityChangeDetailModalComponent,
         DateRangePickerInitialValueSetterDirective,
-        DatePickerInitialValueSetterDirective
+        DatePickerInitialValueSetterDirective,
+        PasswordInputWithShowButtonComponent,
+        KeyValueListManagerComponent,
     ],
     providers: [
         DateTimeService,
         AppLocalizationService,
-        AppNavigationService
+        AppNavigationService,
+        { provide: BsDatepickerConfig, useFactory: NgxBootstrapDatePickerConfigService.getDatepickerConfig },
+        { provide: BsDaterangepickerConfig, useFactory: NgxBootstrapDatePickerConfigService.getDaterangepickerConfig },
+        { provide: BsLocaleService, useFactory: NgxBootstrapDatePickerConfigService.getDatepickerLocale },
     ]
 })
 export class AppCommonModule {
-    static forRoot(): ModuleWithProviders {
+    static forRoot(): ModuleWithProviders<AppCommonModule> {
         return {
             ngModule: AppCommonModule,
-            providers: [
-                AppAuthService,
-                AppRouteGuard
-            ]
+            providers: [AppAuthService, AppRouteGuard],
         };
     }
 }

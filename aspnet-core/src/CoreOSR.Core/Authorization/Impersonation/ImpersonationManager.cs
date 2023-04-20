@@ -2,6 +2,7 @@
 using System.Globalization;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using Abp.Authorization.Users;
 using Abp.Runtime.Caching;
 using Abp.Runtime.Security;
 using Abp.Runtime.Session;
@@ -44,24 +45,32 @@ namespace CoreOSR.Authorization.Impersonation
             var user = await _userManager.FindByIdAsync(cacheItem.TargetUserId.ToString());
 
             //Create identity
+            var identity = await GetClaimsIdentityFromCache(user, cacheItem);
 
-            var identity = (ClaimsIdentity)(await _principalFactory.CreateAsync(user)).Identity;
+            //Remove the cache item to prevent re-use
+            await _cacheManager.GetImpersonationCache().RemoveAsync(impersonationToken);
+
+            return new UserAndIdentity(user, identity);
+        }
+
+        private async Task<ClaimsIdentity> GetClaimsIdentityFromCache(User user, ImpersonationCacheItem cacheItem)
+        {
+            var identity = (ClaimsIdentity) (await _principalFactory.CreateAsync(user)).Identity;
 
             if (!cacheItem.IsBackToImpersonator)
             {
                 //Add claims for audit logging
                 if (cacheItem.ImpersonatorTenantId.HasValue)
                 {
-                    identity.AddClaim(new Claim(AbpClaimTypes.ImpersonatorTenantId, cacheItem.ImpersonatorTenantId.Value.ToString(CultureInfo.InvariantCulture)));
+                    identity.AddClaim(new Claim(AbpClaimTypes.ImpersonatorTenantId,
+                        cacheItem.ImpersonatorTenantId.Value.ToString(CultureInfo.InvariantCulture)));
                 }
 
-                identity.AddClaim(new Claim(AbpClaimTypes.ImpersonatorUserId, cacheItem.ImpersonatorUserId.ToString(CultureInfo.InvariantCulture)));
+                identity.AddClaim(new Claim(AbpClaimTypes.ImpersonatorUserId,
+                    cacheItem.ImpersonatorUserId.ToString(CultureInfo.InvariantCulture)));
             }
 
-            //Remove the cache item to prevent re-use
-            await _cacheManager.GetImpersonationCache().RemoveAsync(impersonationToken);
-
-            return new UserAndIdentity(user, identity);
+            return identity;
         }
 
         public Task<string> GetImpersonationToken(long userId, int? tenantId)

@@ -1,12 +1,11 @@
 import { Injector, Pipe, PipeTransform } from '@angular/core';
 import { AppConsts } from '@shared/AppConsts';
-import { LocalizationService } from '@abp/localization/localization.service';
+import { LocalizationService } from 'abp-ng2-module';
 
 @Pipe({
-    name: 'localize'
+    name: 'localize',
 })
 export class LocalizePipe implements PipeTransform {
-
     localizationSourceName = AppConsts.localization.defaultLocalizationSourceName;
 
     localization: LocalizationService;
@@ -41,10 +40,9 @@ export class LocalizePipe implements PipeTransform {
     }
 
     flattenDeep(array) {
-        return array.reduce((acc, val) =>
-            Array.isArray(val) ?
-                acc.concat(this.flattenDeep(val)) :
-                acc.concat(val),
-            []);
+        return array.reduce(
+            (acc, val) => (Array.isArray(val) ? acc.concat(this.flattenDeep(val)) : acc.concat(val)),
+            []
+        );
     }
 }

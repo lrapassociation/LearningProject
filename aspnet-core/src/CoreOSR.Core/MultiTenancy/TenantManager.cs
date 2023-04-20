@@ -18,6 +18,8 @@ using Microsoft.AspNetCore.Identity;
 using CoreOSR.Notifications;
 using System;
 using System.Diagnostics;
+using Abp.BackgroundJobs;
+using Abp.Localization;
 using Abp.Runtime.Session;
 using Abp.UI;
 using CoreOSR.MultiTenancy.Payments;
@@ -35,12 +37,12 @@ namespace CoreOSR.MultiTenancy
         private readonly RoleManager _roleManager;
         private readonly UserManager _userManager;
         private readonly IUserEmailer _userEmailer;
-        private readonly TenantDemoDataBuilder _demoDataBuilder;
         private readonly INotificationSubscriptionManager _notificationSubscriptionManager;
         private readonly IAppNotifier _appNotifier;
         private readonly IAbpZeroDbMigrator _abpZeroDbMigrator;
         private readonly IPasswordHasher<User> _passwordHasher;
         private readonly IRepository<SubscribableEdition> _subscribableEditionRepository;
+        protected readonly IBackgroundJobManager _backgroundJobManager;
 
         public TenantManager(
             IRepository<Tenant> tenantRepository,
@@ -49,32 +51,32 @@ namespace CoreOSR.MultiTenancy
             IUnitOfWorkManager unitOfWorkManager,
             RoleManager roleManager,
             IUserEmailer userEmailer,
-            TenantDemoDataBuilder demoDataBuilder,
             UserManager userManager,
             INotificationSubscriptionManager notificationSubscriptionManager,
             IAppNotifier appNotifier,
             IAbpZeroFeatureValueStore featureValueStore,
             IAbpZeroDbMigrator abpZeroDbMigrator,
             IPasswordHasher<User> passwordHasher,
-            IRepository<SubscribableEdition> subscribableEditionRepository) : base(
-                tenantRepository,
-                tenantFeatureRepository,
-                editionManager,
-                featureValueStore
-            )
+            IRepository<SubscribableEdition> subscribableEditionRepository,
+            IBackgroundJobManager backgroundJobManager) : base(
+            tenantRepository,
+            tenantFeatureRepository,
+            editionManager,
+            featureValueStore
+        )
         {
             AbpSession = NullAbpSession.Instance;
 
             _unitOfWorkManager = unitOfWorkManager;
             _roleManager = roleManager;
             _userEmailer = userEmailer;
-            _demoDataBuilder = demoDataBuilder;
             _userManager = userManager;
             _notificationSubscriptionManager = notificationSubscriptionManager;
             _appNotifier = appNotifier;
             _abpZeroDbMigrator = abpZeroDbMigrator;
             _passwordHasher = passwordHasher;
             _subscribableEditionRepository = subscribableEditionRepository;
+            _backgroundJobManager = backgroundJobManager;
         }
 
         public async Task<int> CreateWithAdminUserAsync(
@@ -89,12 +91,21 @@ namespace CoreOSR.MultiTenancy
             bool sendActivationEmail,
             DateTime? subscriptionEndDate,
             bool isInTrialPeriod,
-            string emailActivationLink)
+            string emailActivationLink,
+            string adminName = null,
+            string adminSurname = null
+        )
         {
             int newTenantId;
             long newAdminId;
 
             await CheckEditionAsync(editionId, isInTrialPeriod);
+
+            if (isInTrialPeriod && !subscriptionEndDate.HasValue)
+            {
+                throw new UserFriendlyException(LocalizationManager.GetString(
+                    CoreOSRConsts.LocalizationSourceName, "TrialWithoutEndDateErrorMessage"));
+            }
 
             using (var uow = _unitOfWorkManager.Begin(TransactionScopeOption.RequiresNew))
             {
@@ -105,7 +116,9 @@ namespace CoreOSR.MultiTenancy
                     EditionId = editionId,
                     SubscriptionEndDateUtc = subscriptionEndDate?.ToUniversalTime(),
                     IsInTrialPeriod = isInTrialPeriod,
-                    ConnectionString = connectionString.IsNullOrWhiteSpace() ? null : SimpleStringCipher.Instance.Encrypt(connectionString)
+                    ConnectionString = connectionString.IsNullOrWhiteSpace()
+                        ? null
+                        : SimpleStringCipher.Instance.Encrypt(connectionString)
                 };
 
                 await CreateAsync(tenant);
@@ -131,7 +144,7 @@ namespace CoreOSR.MultiTenancy
                     CheckErrors(await _roleManager.UpdateAsync(userRole));
 
                     //Create admin user for the tenant
-                    var adminUser = User.CreateTenantAdminUser(tenant.Id, adminEmailAddress);
+                    var adminUser = User.CreateTenantAdminUser(tenant.Id, adminEmailAddress, adminName, adminSurname);
                     adminUser.ShouldChangePasswordOnNextLogin = shouldChangePasswordOnNextLogin;
                     adminUser.IsActive = true;
 
@@ -146,7 +159,6 @@ namespace CoreOSR.MultiTenancy
                         {
                             CheckErrors(await validator.ValidateAsync(_userManager, adminUser, adminPassword));
                         }
-
                     }
 
                     adminUser.Password = _passwordHasher.HashPassword(adminUser, adminPassword);
@@ -169,7 +181,7 @@ namespace CoreOSR.MultiTenancy
 
                     await _unitOfWorkManager.Current.SaveChangesAsync();
 
-                    await _demoDataBuilder.BuildForAsync(tenant);
+                    await _backgroundJobManager.EnqueueAsync<TenantDemoDataBuilderJob, int>(tenant.Id);
 
                     newTenantId = tenant.Id;
                     newAdminId = adminUser.Id;
@@ -183,7 +195,8 @@ namespace CoreOSR.MultiTenancy
             {
                 using (_unitOfWorkManager.Current.SetTenantId(newTenantId))
                 {
-                    await _notificationSubscriptionManager.SubscribeToAllAvailableNotificationsAsync(new UserIdentifier(newTenantId, newAdminId));
+                    await _notificationSubscriptionManager.SubscribeToAllAvailableNotificationsAsync(
+                        new UserIdentifier(newTenantId, newAdminId));
                     await _unitOfWorkManager.Current.SaveChangesAsync();
                     await uow.CompleteAsync();
                 }
@@ -194,19 +207,23 @@ namespace CoreOSR.MultiTenancy
 
         public async Task CheckEditionAsync(int? editionId, bool isInTrialPeriod)
         {
-            if (!editionId.HasValue || !isInTrialPeriod)
+            await _unitOfWorkManager.WithUnitOfWorkAsync(async () =>
             {
-                return;
-            }
+                if (!editionId.HasValue || !isInTrialPeriod)
+                {
+                    return;
+                }
 
-            var edition = await _subscribableEditionRepository.GetAsync(editionId.Value);
-            if (!edition.IsFree)
-            {
-                return;
-            }
+                var edition = await _subscribableEditionRepository.GetAsync(editionId.Value);
+                if (!edition.IsFree)
+                {
+                    return;
+                }
 
-            var error = LocalizationManager.GetSource(CoreOSRConsts.LocalizationSourceName).GetString("FreeEditionsCannotHaveTrialVersions");
-            throw new UserFriendlyException(error);
+                var error = LocalizationManager.GetSource(CoreOSRConsts.LocalizationSourceName)
+                    .GetString("FreeEditionsCannotHaveTrialVersions");
+                throw new UserFriendlyException(error);
+            });
         }
 
         protected virtual void CheckErrors(IdentityResult identityResult)
@@ -214,10 +231,14 @@ namespace CoreOSR.MultiTenancy
             identityResult.CheckErrors(LocalizationManager);
         }
 
-        public decimal GetUpgradePrice(SubscribableEdition currentEdition, SubscribableEdition targetEdition, int totalRemainingDayCount, PaymentPeriodType paymentPeriodType)
+        public decimal GetUpgradePrice(SubscribableEdition currentEdition, SubscribableEdition targetEdition,
+            int totalRemainingHourCount, PaymentPeriodType paymentPeriodType)
         {
-            var unusedPeriodCount = totalRemainingDayCount / (int)paymentPeriodType;
-            var unusedDayCount = totalRemainingDayCount % (int)paymentPeriodType;
+            int numberOfHoursPerDay = 24;
+
+            var totalRemainingDayCount = totalRemainingHourCount / numberOfHoursPerDay;
+            var unusedPeriodCount = totalRemainingDayCount / (int) paymentPeriodType;
+            var unusedHoursCount = totalRemainingHourCount % ((int) paymentPeriodType * numberOfHoursPerDay);
 
             decimal currentEditionPriceForUnusedPeriod = 0;
             decimal targetEditionPriceForUnusedPeriod = 0;
@@ -228,31 +249,38 @@ namespace CoreOSR.MultiTenancy
             if (currentEditionPrice > 0)
             {
                 currentEditionPriceForUnusedPeriod = currentEditionPrice * unusedPeriodCount;
-                currentEditionPriceForUnusedPeriod += (currentEditionPrice / (int)paymentPeriodType) * unusedDayCount;
+                currentEditionPriceForUnusedPeriod += (currentEditionPrice / (int) paymentPeriodType) /
+                    numberOfHoursPerDay * unusedHoursCount;
             }
 
             if (targetEditionPrice > 0)
             {
                 targetEditionPriceForUnusedPeriod = targetEditionPrice * unusedPeriodCount;
-                targetEditionPriceForUnusedPeriod += (targetEditionPrice / (int)paymentPeriodType) * unusedDayCount;
+                targetEditionPriceForUnusedPeriod += (targetEditionPrice / (int) paymentPeriodType) /
+                    numberOfHoursPerDay * unusedHoursCount;
             }
 
             return targetEditionPriceForUnusedPeriod - currentEditionPriceForUnusedPeriod;
         }
 
-        public async Task<Tenant> UpdateTenantAsync(int tenantId, bool isActive, bool? isInTrialPeriod, PaymentPeriodType? paymentPeriodType, int editionId, EditionPaymentType editionPaymentType)
+        public async Task<Tenant> UpdateTenantAsync(
+            int tenantId,
+            bool isActive,
+            bool? isInTrialPeriod,
+            PaymentPeriodType? paymentPeriodType,
+            int editionId,
+            EditionPaymentType editionPaymentType)
         {
             var tenant = await FindByIdAsync(tenantId);
 
             tenant.IsActive = isActive;
-
+            tenant.EditionId = editionId;
+            
             if (isInTrialPeriod.HasValue)
             {
                 tenant.IsInTrialPeriod = isInTrialPeriod.Value;
             }
-
-            tenant.EditionId = editionId;
-
+            
             if (paymentPeriodType.HasValue)
             {
                 tenant.UpdateSubscriptionDateForPayment(paymentPeriodType.Value, editionPaymentType);
@@ -261,11 +289,13 @@ namespace CoreOSR.MultiTenancy
             return tenant;
         }
 
-        public async Task<EndSubscriptionResult> EndSubscriptionAsync(Tenant tenant, SubscribableEdition edition, DateTime nowUtc)
+        public async Task<EndSubscriptionResult> EndSubscriptionAsync(Tenant tenant, SubscribableEdition edition,
+            DateTime nowUtc)
         {
             if (tenant.EditionId == null || tenant.HasUnlimitedTimeSubscription())
             {
-                throw new Exception($"Can not end tenant {tenant.TenancyName} subscription for {edition.DisplayName} tenant has unlimited time subscription!");
+                throw new Exception(
+                    $"Can not end tenant {tenant.TenancyName} subscription for {edition.DisplayName} tenant has unlimited time subscription!");
             }
 
             Debug.Assert(tenant.SubscriptionEndDateUtc != null, "tenant.SubscriptionEndDateUtc != null");
@@ -273,12 +303,14 @@ namespace CoreOSR.MultiTenancy
             var subscriptionEndDateUtc = tenant.SubscriptionEndDateUtc.Value;
             if (!tenant.IsInTrialPeriod)
             {
-                subscriptionEndDateUtc = tenant.SubscriptionEndDateUtc.Value.AddDays(edition.WaitingDayAfterExpire ?? 0);
+                subscriptionEndDateUtc =
+                    tenant.SubscriptionEndDateUtc.Value.AddDays(edition.WaitingDayAfterExpire ?? 0);
             }
 
             if (subscriptionEndDateUtc >= nowUtc)
             {
-                throw new Exception($"Can not end tenant {tenant.TenancyName} subscription for {edition.DisplayName} since subscription has not expired yet!");
+                throw new Exception(
+                    $"Can not end tenant {tenant.TenancyName} subscription for {edition.DisplayName} since subscription has not expired yet!");
             }
 
             if (!tenant.IsInTrialPeriod && edition.ExpiringEditionId.HasValue)
@@ -297,6 +329,17 @@ namespace CoreOSR.MultiTenancy
             await UpdateAsync(tenant);
 
             return EndSubscriptionResult.TenantSetInActive;
+        }
+
+        public override Task UpdateAsync(Tenant tenant)
+        {
+            if (tenant.IsInTrialPeriod && !tenant.SubscriptionEndDateUtc.HasValue)
+            {
+                throw new UserFriendlyException(LocalizationManager.GetString(
+                    CoreOSRConsts.LocalizationSourceName, "TrialWithoutEndDateErrorMessage"));
+            }
+
+            return base.UpdateAsync(tenant);
         }
     }
 }

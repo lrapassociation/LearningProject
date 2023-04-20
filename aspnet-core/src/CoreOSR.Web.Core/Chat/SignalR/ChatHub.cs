@@ -1,8 +1,8 @@
 ﻿using System;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Abp;
 using Abp.AspNetCore.SignalR.Hubs;
-using Abp.Auditing;
 using Abp.Localization;
 using Abp.RealTime;
 using Abp.Runtime.Session;
@@ -10,6 +10,7 @@ using Abp.UI;
 using Castle.Core.Logging;
 using Castle.Windsor;
 using CoreOSR.Chat;
+using CoreOSR.Web.Xss;
 
 namespace CoreOSR.Web.Chat.SignalR
 {
@@ -18,7 +19,9 @@ namespace CoreOSR.Web.Chat.SignalR
         private readonly IChatMessageManager _chatMessageManager;
         private readonly ILocalizationManager _localizationManager;
         private readonly IWindsorContainer _windsorContainer;
+        private readonly IHtmlSanitizer _htmlSanitizer;
         private bool _isCallByRelease;
+        private IAbpSession ChatAbpSession { get; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ChatHub"/> class.
@@ -28,25 +31,31 @@ namespace CoreOSR.Web.Chat.SignalR
             ILocalizationManager localizationManager,
             IWindsorContainer windsorContainer,
             IOnlineClientManager<ChatChannel> onlineClientManager,
-            IClientInfoProvider clientInfoProvider) : base(onlineClientManager, clientInfoProvider)
+            IOnlineClientInfoProvider clientInfoProvider, 
+            IHtmlSanitizer htmlSanitizer) : base(onlineClientManager, clientInfoProvider)
         {
             _chatMessageManager = chatMessageManager;
             _localizationManager = localizationManager;
             _windsorContainer = windsorContainer;
+            _htmlSanitizer = htmlSanitizer;
 
             Logger = NullLogger.Instance;
-            AbpSession = NullAbpSession.Instance;
+            ChatAbpSession = NullAbpSession.Instance;
         }
 
         public async Task<string> SendMessage(SendChatMessageInput input)
         {
-            var sender = AbpSession.ToUserIdentifier();
+            input.Message = _htmlSanitizer.Sanitize(input.Message);
+            var sender = Context.ToUserIdentifier();
             var receiver = new UserIdentifier(input.TenantId, input.UserId);
 
             try
             {
-                await _chatMessageManager.SendMessageAsync(sender, receiver, input.Message, input.TenancyName, input.UserName, input.ProfilePictureId);
-                return string.Empty;
+                using (ChatAbpSession.Use(Context.GetTenantId(), Context.GetUserId()))
+                {
+                    await _chatMessageManager.SendMessageAsync(sender, receiver, input.Message, input.TenancyName, input.UserName, input.ProfilePictureId);
+                    return string.Empty;
+                }
             }
             catch (UserFriendlyException ex)
             {

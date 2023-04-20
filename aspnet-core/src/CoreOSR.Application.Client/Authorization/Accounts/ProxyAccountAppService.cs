@@ -40,9 +40,14 @@ namespace CoreOSR.Authorization.Accounts
             await ApiClient.PostAnonymousAsync(GetEndpoint(nameof(ActivateEmail)), input);
         }
 
-        public async Task<ImpersonateOutput> Impersonate(ImpersonateInput input)
+        public async Task<ImpersonateOutput> ImpersonateUser(ImpersonateUserInput input)
         {
-            return await ApiClient.PostAsync<ImpersonateOutput>(GetEndpoint(nameof(Impersonate)), input);
+            return await ApiClient.PostAsync<ImpersonateOutput>(GetEndpoint(nameof(ImpersonateUser)), input);
+        }
+
+        public async Task<ImpersonateOutput> ImpersonateTenant(ImpersonateTenantInput input)
+        {
+            return await ApiClient.PostAsync<ImpersonateOutput>(GetEndpoint(nameof(ImpersonateTenant)), input);
         }
 
         public async Task<ImpersonateOutput> BackToImpersonator()
@@ -53,6 +58,11 @@ namespace CoreOSR.Authorization.Accounts
         public async Task<SwitchToLinkedAccountOutput> SwitchToLinkedAccount(SwitchToLinkedAccountInput input)
         {
             return await ApiClient.PostAnonymousAsync<SwitchToLinkedAccountOutput>(GetEndpoint(nameof(SwitchToLinkedAccount)));
+        }
+
+        public async Task<ImpersonateOutput> DelegatedImpersonate(DelegatedImpersonateInput input)
+        {
+            return await ApiClient.PostAsync<ImpersonateOutput>(GetEndpoint(nameof(DelegatedImpersonate)), input);
         }
     }
 }

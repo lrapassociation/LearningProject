@@ -3,6 +3,7 @@ using System.Linq;
 using System.Security.Claims;
 using Abp.AspNetZeroCore.Web.Authentication.External;
 using Abp.Extensions;
+using Abp.UI;
 using Microsoft.AspNetCore.Identity;
 
 namespace CoreOSR.Web.Authentication.External
@@ -11,7 +12,20 @@ namespace CoreOSR.Web.Authentication.External
     {
         public virtual string GetUserNameFromClaims(List<Claim> claims)
         {
-            return claims.First(c => c.Type == ClaimTypes.Email)?.Value.ToMd5();
+            var emailClaim = claims.FirstOrDefault(c => c.Type == "unique_name");
+            if (emailClaim != null)
+            {
+                return emailClaim.Value.ToMd5();
+            }
+            
+            emailClaim = claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+            
+            if (emailClaim != null)
+            {
+                return emailClaim.Value.ToMd5();
+            }
+
+            throw new UserFriendlyException($"Both unique_name and {ClaimTypes.Email} claims are missing!");
         }
 
         public virtual string GetUserNameFromExternalAuthUserInfo(ExternalAuthUserInfo userInfo)

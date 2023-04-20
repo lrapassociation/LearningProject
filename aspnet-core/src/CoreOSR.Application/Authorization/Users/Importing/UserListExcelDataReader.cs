@@ -1,15 +1,17 @@
-﻿using System.Collections.Generic;
-using System.Linq;
+﻿using System;
+using System.Collections.Generic;
+using System.Dynamic;
 using System.Text;
 using Abp.Localization;
 using Abp.Localization.Sources;
-using OfficeOpenXml;
 using CoreOSR.Authorization.Users.Importing.Dto;
-using CoreOSR.DataExporting.Excel.EpPlus;
+using System.Linq;
+using Abp.Collections.Extensions;
+using CoreOSR.DataExporting.Excel.MiniExcel;
 
 namespace CoreOSR.Authorization.Users.Importing
 {
-    public class UserListExcelDataReader : EpPlusExcelImporterBase<ImportUserDto>, IUserListExcelDataReader
+    public class UserListExcelDataReader : MiniExcelExcelImporterBase<ImportUserDto>, IUserListExcelDataReader
     {
         private readonly ILocalizationSource _localizationSource;
 
@@ -23,9 +25,9 @@ namespace CoreOSR.Authorization.Users.Importing
             return ProcessExcelFile(fileBytes, ProcessExcelRow);
         }
 
-        private ImportUserDto ProcessExcelRow(ExcelWorksheet worksheet, int row)
+        private ImportUserDto ProcessExcelRow(dynamic row)
         {
-            if (IsRowEmpty(worksheet, row))
+            if (IsRowEmpty(row))
             {
                 return null;
             }
@@ -35,15 +37,15 @@ namespace CoreOSR.Authorization.Users.Importing
 
             try
             {
-                user.UserName = GetRequiredValueFromRowOrNull(worksheet, row, 1, nameof(user.UserName), exceptionMessage);
-                user.Name = GetRequiredValueFromRowOrNull(worksheet, row, 2, nameof(user.Name), exceptionMessage);
-                user.Surname = GetRequiredValueFromRowOrNull(worksheet, row, 3, nameof(user.Surname), exceptionMessage);
-                user.EmailAddress = GetRequiredValueFromRowOrNull(worksheet, row, 4, nameof(user.EmailAddress), exceptionMessage);
-                user.PhoneNumber = worksheet.Cells[row, 5].Value?.ToString();
-                user.Password = GetRequiredValueFromRowOrNull(worksheet, row, 6, nameof(user.Password), exceptionMessage);
-                user.AssignedRoleNames = GetAssignedRoleNamesFromRow(worksheet, row, 7);
+                user.UserName = GetRequiredValueFromRowOrNull(row, nameof(user.UserName), exceptionMessage);
+                user.Name = GetRequiredValueFromRowOrNull(row,  nameof(user.Name), exceptionMessage);
+                user.Surname = GetRequiredValueFromRowOrNull(row, nameof(user.Surname), exceptionMessage);
+                user.EmailAddress = GetRequiredValueFromRowOrNull(row, nameof(user.EmailAddress), exceptionMessage);
+                user.PhoneNumber = GetOptionalValueFromRowOrNull(row, nameof(user.PhoneNumber), exceptionMessage);
+                user.Password = GetRequiredValueFromRowOrNull(row, nameof(user.Password), exceptionMessage);
+                user.AssignedRoleNames = GetAssignedRoleNamesFromRow(row);
             }
-            catch (System.Exception exception)
+            catch (Exception exception)
             {
                 user.Exception = exception.Message;
             }
@@ -51,39 +53,55 @@ namespace CoreOSR.Authorization.Users.Importing
             return user;
         }
 
-        private string GetRequiredValueFromRowOrNull(ExcelWorksheet worksheet, int row, int column, string columnName, StringBuilder exceptionMessage)
+        private string GetRequiredValueFromRowOrNull(
+            dynamic row,
+            string columnName,
+            StringBuilder exceptionMessage)
         {
-            var cellValue = worksheet.Cells[row, column].Value;
-
-            if (cellValue != null && !string.IsNullOrWhiteSpace(cellValue.ToString()))
+            var cellValue = (row as ExpandoObject).GetOrDefault(columnName)?.ToString();
+            if (cellValue != null && !string.IsNullOrWhiteSpace(cellValue))
             {
-                return cellValue.ToString();
+                return cellValue;
             }
 
             exceptionMessage.Append(GetLocalizedExceptionMessagePart(columnName));
             return null;
         }
 
-        private string[] GetAssignedRoleNamesFromRow(ExcelWorksheet worksheet, int row, int column)
+        private string GetOptionalValueFromRowOrNull(dynamic row, string columnName, StringBuilder exceptionMessage)
         {
-            var cellValue = worksheet.Cells[row, column].Value;
-
-            if (cellValue == null || string.IsNullOrWhiteSpace(cellValue.ToString()))
+            var cellValue = (row as ExpandoObject).GetOrDefault(columnName)?.ToString();
+            if (cellValue != null && !string.IsNullOrWhiteSpace(cellValue))
             {
-                return new string[0];
+                return cellValue;
             }
 
-            return cellValue.ToString().Split(',').Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()).ToArray();
+            exceptionMessage.Append(GetLocalizedExceptionMessagePart(columnName));
+            return String.Empty;
+        }
+
+        private string[] GetAssignedRoleNamesFromRow(dynamic row)
+        {
+            var cellValue = (row as ExpandoObject).GetOrDefault(nameof(ImportUserDto.AssignedRoleNames))?.ToString();
+            if (cellValue == null || string.IsNullOrWhiteSpace(cellValue))
+            {
+                return Array.Empty<string>();
+            }
+
+            var roles = cellValue.Split(',');
+            return roles.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim())
+                .ToArray();
         }
 
         private string GetLocalizedExceptionMessagePart(string parameter)
         {
             return _localizationSource.GetString("{0}IsInvalid", _localizationSource.GetString(parameter)) + "; ";
         }
-
-        private bool IsRowEmpty(ExcelWorksheet worksheet, int row)
+        
+        private bool IsRowEmpty(dynamic row)
         {
-            return worksheet.Cells[row, 1].Value == null || string.IsNullOrWhiteSpace(worksheet.Cells[row, 1].Value.ToString());
+            var username = (row as ExpandoObject).GetOrDefault(nameof(User.UserName))?.ToString();
+            return string.IsNullOrWhiteSpace(username);
         }
     }
 }

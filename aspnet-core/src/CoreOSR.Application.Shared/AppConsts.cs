@@ -20,13 +20,14 @@ namespace CoreOSR
         /// <summary>
         /// Default pass phrase for SimpleStringCipher decrypt/encrypt operations
         /// </summary>
-        public const string DefaultPassPhrase = "gsKxGZ012HLL3MI5";
+        public const string DefaultPassPhrase = "270ec71f5adc43fc89afb8bbb1981681";
 
-        public const int ResizedMaxProfilPictureBytesUserFriendlyValue = 1024;
+        public const int ResizedMaxProfilePictureBytesUserFriendlyValue = 1024;
 
-        public const int MaxProfilPictureBytesUserFriendlyValue = 5;
+        public const int MaxProfilePictureBytesUserFriendlyValue = 5;
 
         public const string TokenValidityKey = "token_validity_key";
+        public const string RefreshTokenValidityKey = "refresh_token_validity_key";
         public const string SecurityStampKey = "AspNet.Identity.SecurityStamp";
 
         public const string TokenType = "token_type";
@@ -45,10 +46,9 @@ namespace CoreOSR
         public const string Theme10 = "theme10";
         public const string Theme11 = "theme11";
         public const string Theme12 = "theme12";
+        public const string Theme13 = "theme13";
 
         public static TimeSpan AccessTokenExpiration = TimeSpan.FromDays(1);
         public static TimeSpan RefreshTokenExpiration = TimeSpan.FromDays(365);
-
-        public const string DateTimeOffsetFormat = "yyyy-MM-ddTHH:mm:sszzz";
     }
 }

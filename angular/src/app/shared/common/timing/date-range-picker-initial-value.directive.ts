@@ -1,27 +1,27 @@
 import { AfterViewInit, Directive, ElementRef, EventEmitter, Injector, Input, Output } from '@angular/core';
 import { AppComponentBase } from '@shared/common/app-component-base';
-import * as moment from 'moment';
+import { DateTime } from 'luxon';
+import { DateTimeService } from './date-time.service';
 
 @Directive({
-    selector: '[dateRangePickerInitialValue]'
+    selector: '[dateRangePickerInitialValue]',
 })
-export class DateRangePickerInitialValueSetterDirective extends AppComponentBase implements AfterViewInit {
-
-    hostElement: ElementRef;
+export class DateRangePickerInitialValueSetterDirective implements AfterViewInit {
     @Input() ngModel;
+    hostElement: ElementRef;
 
-    constructor(
-        injector: Injector,
-        private _element: ElementRef
-    ) {
-        super(injector);
+    constructor(injector: Injector, private _element: ElementRef, private _dateTimeService: DateTimeService) {
         this.hostElement = _element;
     }
 
     ngAfterViewInit(): void {
         if (this.ngModel && this.ngModel[0] && this.ngModel[1]) {
             setTimeout(() => {
-                (this.hostElement.nativeElement as any).value = moment(this.ngModel[0]).format('L') + ' - ' + moment(this.ngModel[1]).format('L');
+                let value =
+                    this._dateTimeService.formatDate(this.ngModel[0], 'F') +
+                    ' - ' +
+                    this._dateTimeService.formatDate(this.ngModel[1], 'F');
+                (this.hostElement.nativeElement as any).value = value;
             });
         }
     }

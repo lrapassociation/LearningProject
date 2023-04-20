@@ -13,23 +13,21 @@ import {
     CreateInvoiceDto,
     EditionPaymentType,
     SubscriptionStartType,
-    SubscriptionPaymentType
+    SubscriptionPaymentType,
 } from '@shared/service-proxies/service-proxies';
 
-import { LazyLoadEvent } from 'primeng/components/common/lazyloadevent';
-import { Paginator } from 'primeng/components/paginator/paginator';
-import { Table } from 'primeng/components/table/table';
+import { LazyLoadEvent } from 'primeng/api';
+import { Paginator } from 'primeng/paginator';
+import { Table } from 'primeng/table';
 import { finalize } from 'rxjs/operators';
 
 @Component({
     templateUrl: './subscription-management.component.html',
-    animations: [appModuleAnimation()]
+    animations: [appModuleAnimation()],
 })
-
 export class SubscriptionManagementComponent extends AppComponentBase implements OnInit {
-
-    @ViewChild('dataTable', {static: true}) dataTable: Table;
-    @ViewChild('paginator', {static: true}) paginator: Paginator;
+    @ViewChild('dataTable', { static: true }) dataTable: Table;
+    @ViewChild('paginator', { static: true }) paginator: Paginator;
 
     subscriptionStartType: typeof SubscriptionStartType = SubscriptionStartType;
     subscriptionPaymentType: typeof SubscriptionPaymentType = SubscriptionPaymentType;
@@ -62,10 +60,12 @@ export class SubscriptionManagementComponent extends AppComponentBase implements
         if (invoiceNo) {
             window.open('/app/admin/invoice/' + paymentId, '_blank');
         } else {
-            this._invoiceServiceProxy.createInvoice(new CreateInvoiceDto({ subscriptionPaymentId: paymentId })).subscribe(() => {
-                this.getPaymentHistory();
-                window.open('/app/admin/invoice/' + paymentId, '_blank');
-            });
+            this._invoiceServiceProxy
+                .createInvoice(new CreateInvoiceDto({ subscriptionPaymentId: paymentId }))
+                .subscribe(() => {
+                    this.getPaymentHistory();
+                    window.open('/app/admin/invoice/' + paymentId, '_blank');
+                });
         }
     }
 
@@ -83,30 +83,35 @@ export class SubscriptionManagementComponent extends AppComponentBase implements
         if (this.primengTableHelper.shouldResetPaging(event)) {
             this.paginator.changePage(0);
 
-            return;
+            if (this.primengTableHelper.records && this.primengTableHelper.records.length > 0) {
+                return;
+            }
         }
 
         this.primengTableHelper.showLoadingIndicator();
 
-        this._paymentServiceProxy.getPaymentHistory(
-            this.primengTableHelper.getSorting(this.dataTable),
-            this.primengTableHelper.getMaxResultCount(this.paginator, event),
-            this.primengTableHelper.getSkipCount(this.paginator, event)
-        ).pipe(finalize(() => this.primengTableHelper.hideLoadingIndicator())).subscribe(result => {
-            this.primengTableHelper.totalRecordsCount = result.totalCount;
-            this.primengTableHelper.records = result.items;
-            this.primengTableHelper.hideLoadingIndicator();
-        });
+        this._paymentServiceProxy
+            .getPaymentHistory(
+                this.primengTableHelper.getSorting(this.dataTable),
+                this.primengTableHelper.getMaxResultCount(this.paginator, event),
+                this.primengTableHelper.getSkipCount(this.paginator, event)
+            )
+            .pipe(finalize(() => this.primengTableHelper.hideLoadingIndicator()))
+            .subscribe((result) => {
+                this.primengTableHelper.totalRecordsCount = result.totalCount;
+                this.primengTableHelper.records = result.items;
+                this.primengTableHelper.hideLoadingIndicator();
+            });
     }
 
     disableRecurringPayments() {
-        this._subscriptionServiceProxy.disableRecurringPayments().subscribe(result => {
+        this._subscriptionServiceProxy.disableRecurringPayments().subscribe((result) => {
             this.tenant.subscriptionPaymentType = this.subscriptionPaymentType.RecurringManual;
         });
     }
 
     enableRecurringPayments() {
-        this._subscriptionServiceProxy.enableRecurringPayments().subscribe(result => {
+        this._subscriptionServiceProxy.enableRecurringPayments().subscribe((result) => {
             this.tenant.subscriptionPaymentType = this.subscriptionPaymentType.RecurringAutomatic;
         });
     }

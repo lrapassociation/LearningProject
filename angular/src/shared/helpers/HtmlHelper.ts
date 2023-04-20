@@ -1,16 +1,14 @@
 export class HtmlHelper {
-
     static encodeText(value: string): string {
         let div = document.createElement('div');
-        div[('textContent' in div) ? 'textContent' : 'innerText'] = value;
+        div['textContent' in div ? 'textContent' : 'innerText'] = value;
         return div.innerHTML;
-
     }
 
     static decodeText(value: string): string {
         let div = document.createElement('div') as any;
         div.innerHTML = value;
-        return ('textContent' in div) ? div.textContent : div.innerText;
+        return 'textContent' in div ? div.textContent : div.innerText;
     }
 
     static encodeJson(jsonObject: object): string {

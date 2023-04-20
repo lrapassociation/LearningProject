@@ -10,75 +10,103 @@ namespace CoreOSR.Friendships
     public class FriendshipManager : CoreOSRDomainServiceBase, IFriendshipManager
     {
         private readonly IRepository<Friendship, long> _friendshipRepository;
+        private readonly IUnitOfWorkManager _unitOfWorkManager;
 
-        public FriendshipManager(IRepository<Friendship, long> friendshipRepository)
+        public FriendshipManager(
+            IRepository<Friendship, long> friendshipRepository,
+            IUnitOfWorkManager unitOfWorkManager)
         {
             _friendshipRepository = friendshipRepository;
+            _unitOfWorkManager = unitOfWorkManager;
         }
 
-        [UnitOfWork]
         public async Task CreateFriendshipAsync(Friendship friendship)
         {
-            if (friendship.TenantId == friendship.FriendTenantId &&
-                friendship.UserId == friendship.FriendUserId)
+            await _unitOfWorkManager.WithUnitOfWorkAsync(async () =>
             {
-                throw new UserFriendlyException(L("YouCannotBeFriendWithYourself"));
-            }
+                if (friendship.TenantId == friendship.FriendTenantId &&
+                    friendship.UserId == friendship.FriendUserId)
+                {
+                    throw new UserFriendlyException(L("YouCannotBeFriendWithYourself"));
+                }
 
-            using (CurrentUnitOfWork.SetTenantId(friendship.TenantId))
-            {
-                _friendshipRepository.Insert(friendship);
-               await CurrentUnitOfWork.SaveChangesAsync();
-            }
+                using (CurrentUnitOfWork.SetTenantId(friendship.TenantId))
+                {
+                    await _friendshipRepository.InsertAsync(friendship);
+                    await CurrentUnitOfWork.SaveChangesAsync();
+                }
+            });
         }
 
-        [UnitOfWork]
         public async Task UpdateFriendshipAsync(Friendship friendship)
         {
-            using (CurrentUnitOfWork.SetTenantId(friendship.TenantId))
+            await _unitOfWorkManager.WithUnitOfWorkAsync(async () =>
             {
-                _friendshipRepository.Update(friendship);
-                await CurrentUnitOfWork.SaveChangesAsync();
-            }
+                using (CurrentUnitOfWork.SetTenantId(friendship.TenantId))
+                {
+                    await _friendshipRepository.UpdateAsync(friendship);
+                    await CurrentUnitOfWork.SaveChangesAsync();
+                }
+            });
         }
-
-        [UnitOfWork]
+        
         public async Task<Friendship> GetFriendshipOrNullAsync(UserIdentifier user, UserIdentifier probableFriend)
         {
-            using (CurrentUnitOfWork.SetTenantId(user.TenantId))
+            return await _unitOfWorkManager.WithUnitOfWorkAsync(async () =>
             {
-                return await _friendshipRepository.FirstOrDefaultAsync(friendship =>
-                                    friendship.UserId == user.UserId &&
-                                    friendship.TenantId == user.TenantId &&
-                                    friendship.FriendUserId == probableFriend.UserId &&
-                                    friendship.FriendTenantId == probableFriend.TenantId);
-            }
+                using (CurrentUnitOfWork.SetTenantId(user.TenantId))
+                {
+                    return await _friendshipRepository.FirstOrDefaultAsync(friendship =>
+                        friendship.UserId == user.UserId &&
+                        friendship.TenantId == user.TenantId &&
+                        friendship.FriendUserId == probableFriend.UserId &&
+                        friendship.FriendTenantId == probableFriend.TenantId);
+                }
+            });
         }
-
-        [UnitOfWork]
+        
         public async Task BanFriendAsync(UserIdentifier userIdentifier, UserIdentifier probableFriend)
         {
-            var friendship = (await GetFriendshipOrNullAsync(userIdentifier, probableFriend));
-            if (friendship == null)
+            await _unitOfWorkManager.WithUnitOfWorkAsync(async () =>
             {
-                throw new Exception("Friendship does not exist between " + userIdentifier + " and " + probableFriend);
-            }
+                var friendship = (await GetFriendshipOrNullAsync(userIdentifier, probableFriend));
+                if (friendship == null)
+                {
+                    throw new Exception("Friendship does not exist between " + userIdentifier + " and " + probableFriend);
+                }
 
-            friendship.State = FriendshipState.Blocked;
-            await UpdateFriendshipAsync(friendship);
+                friendship.State = FriendshipState.Blocked;
+                await UpdateFriendshipAsync(friendship);
+            });
         }
 
-        [UnitOfWork]
+        public async Task RemoveFriendAsync(UserIdentifier userIdentifier, UserIdentifier probableFriend)
+        {
+            await _unitOfWorkManager.WithUnitOfWorkAsync(async () =>
+            {
+                var friendship = (await GetFriendshipOrNullAsync(userIdentifier, probableFriend));
+                if (friendship == null)
+                {
+                    throw new Exception("Friendship does not exist between " + userIdentifier + " and " + probableFriend);
+                }
+
+                await _friendshipRepository.DeleteAsync(friendship);
+            });
+        }
+
         public async Task AcceptFriendshipRequestAsync(UserIdentifier userIdentifier, UserIdentifier probableFriend)
         {
-            var friendship = (await GetFriendshipOrNullAsync(userIdentifier, probableFriend));
-            if (friendship == null)
+            await _unitOfWorkManager.WithUnitOfWorkAsync(async () =>
             {
-                throw new Exception("Friendship does not exist between " + userIdentifier + " and " + probableFriend);
-            }
+                var friendship = (await GetFriendshipOrNullAsync(userIdentifier, probableFriend));
+                if (friendship == null)
+                {
+                    throw new Exception("Friendship does not exist between " + userIdentifier + " and " + probableFriend);
+                }
 
-            friendship.State = FriendshipState.Accepted;
-            await UpdateFriendshipAsync(friendship);
+                friendship.State = FriendshipState.Accepted;
+                await UpdateFriendshipAsync(friendship);
+            });
         }
     }
 }

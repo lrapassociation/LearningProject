@@ -1,15 +1,19 @@
-import { Component, Injector } from '@angular/core';
+import { Component, Injector, OnInit } from '@angular/core';
 import { appModuleAnimation } from '@shared/animations/routerTransition';
 import { AppComponentBase } from '@shared/common/app-component-base';
 
 @Component({
     templateUrl: './demo-ui-components.component.html',
-    animations: [appModuleAnimation()]
+    animations: [appModuleAnimation()],
 })
 export class DemoUiComponentsComponent extends AppComponentBase {
-    constructor(
-        injector: Injector
-    ) {
+    alertVisible = true;
+
+    constructor(injector: Injector) {
         super(injector);
+    }
+
+    hideAlert(): void{
+        this.alertVisible = false;
     }
 }

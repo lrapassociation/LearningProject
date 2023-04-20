@@ -10,18 +10,16 @@ import {
     PaymentGatewayModel,
     EditionPaymentType,
     PaymentPeriodType,
-    SubscriptionPaymentGatewayType
+    SubscriptionPaymentGatewayType,
 } from '@shared/service-proxies/service-proxies';
 import { AppConsts } from '@shared/AppConsts';
 import { PaymentHelperService } from './payment-helper.service';
 
 @Component({
     templateUrl: './extend.component.html',
-    animations: [accountModuleAnimation()]
+    animations: [accountModuleAnimation()],
 })
-
 export class ExtendEditionComponent extends AppComponentBase implements OnInit {
-
     editionPaymentType: EditionPaymentType;
     edition: EditionSelectDto = new EditionSelectDto();
     tenantId: number = abp.session.tenantId;
@@ -37,46 +35,52 @@ export class ExtendEditionComponent extends AppComponentBase implements OnInit {
         private _router: Router,
         private _paymnetHelperService: PaymentHelperService,
         private _activatedRoute: ActivatedRoute,
-        private _paymentAppService: PaymentServiceProxy) {
+        private _paymentAppService: PaymentServiceProxy
+    ) {
         super(injector);
     }
 
     ngOnInit(): void {
         this.editionPaymentType = parseInt(this._activatedRoute.snapshot.queryParams['editionPaymentType']);
 
-        this._paymentAppService.getPaymentInfo(undefined)
-            .subscribe((result: PaymentInfoDto) => {
-                this.edition = result.edition;
-                this.additionalPrice = Number(result.additionalPrice.toFixed(2));
-                this.selectedPaymentPeriodType = this._paymnetHelperService.getInitialSelectedPaymentPeriodType(this.edition);
-            });
+        this._paymentAppService.getPaymentInfo(undefined).subscribe((result: PaymentInfoDto) => {
+            this.edition = result.edition;
+            this.additionalPrice = Number(result.additionalPrice.toFixed(2));
+            this.selectedPaymentPeriodType = this._paymnetHelperService.getInitialSelectedPaymentPeriodType(
+                this.edition
+            );
+        });
 
-        this._paymentAppService.getActiveGateways(undefined)
-            .subscribe((result: PaymentGatewayModel[]) => {
-                this.paymentGateways = result;
-            });
+        this._paymentAppService.getActiveGateways(undefined).subscribe((result: PaymentGatewayModel[]) => {
+            this.paymentGateways = result;
+        });
     }
 
     checkout(gatewayType) {
         let input = {} as CreatePaymentDto;
         input.editionId = this.edition.id;
-        input.editionPaymentType = ((this.editionPaymentType) as any);
-        input.paymentPeriodType = ((this.selectedPaymentPeriodType) as any);
+        input.editionPaymentType = this.editionPaymentType as any;
+        input.paymentPeriodType = this.selectedPaymentPeriodType as any;
         input.recurringPaymentEnabled = false;
         input.subscriptionPaymentGatewayType = gatewayType;
-        input.successUrl = AppConsts.remoteServiceBaseUrl + '/api/services/app/payment/' + this._paymnetHelperService.getEditionPaymentType(this.editionPaymentType) + 'Succeed';
+        input.successUrl =
+            AppConsts.remoteServiceBaseUrl +
+            '/api/services/app/payment/' +
+            this._paymnetHelperService.getEditionPaymentType(this.editionPaymentType) +
+            'Succeed';
         input.errorUrl = AppConsts.remoteServiceBaseUrl + '/api/services/app/payment/PaymentFailed';
 
-        this._paymentAppService.createPayment(input)
-            .subscribe((paymentId: number) => {
-                this._router.navigate(['account/' + this.getPaymentGatewayType(gatewayType).toLocaleLowerCase() + '-purchase'],
-                    {
-                        queryParams: {
-                            paymentId: paymentId,
-                            redirectUrl: 'app/admin/subscription-management'
-                        }
-                    });
-            });
+        this._paymentAppService.createPayment(input).subscribe((paymentId: number) => {
+            this._router.navigate(
+                ['account/' + this.getPaymentGatewayType(gatewayType).toLocaleLowerCase() + '-purchase'],
+                {
+                    queryParams: {
+                        paymentId: paymentId,
+                        redirectUrl: 'app/admin/subscription-management',
+                    },
+                }
+            );
+        });
     }
 
     getPaymentGatewayType(gatewayType): string {

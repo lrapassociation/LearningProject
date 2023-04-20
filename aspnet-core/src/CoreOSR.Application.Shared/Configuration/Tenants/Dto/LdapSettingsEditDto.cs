@@ -14,5 +14,12 @@ namespace CoreOSR.Configuration.Tenants.Dto
 
         [DisableAuditing]
         public string Password { get; set; }
+
+        public bool UseSsl { get; set; }
+
+        public LdapSettingsEditDto()
+        {
+            UseSsl = false;
+        }
     }
 }

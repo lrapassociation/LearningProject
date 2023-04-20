@@ -2,17 +2,12 @@
 {
     public static class DebugServerIpAddresses
     {
-        //You can use Emulators.Android, Emulators.Gennymotion or LocalhostIp based on your needs.
-        public static string Current => LocalhostIp;
-
-        //You can configure your computer's IP adress for external access (if Current = LocalhostIp)
-        private const string LocalhostIp = "192.168.1.100";
-
-        //Loopback addresses by emulators.
-        private static class Emulators
-        {
-            public const string Android = "10.0.2.2";
-            public const string Gennymotion = "10.0.3.2";
-        }
+        /*
+         * This field is being used for setting IP address for debugging the clients (eg: Xamarin application)
+         * It's being set in
+         *  - SplashActivity.cs (StartApplication method) in *.Mobile.Droid project,
+         *  - AppDelegate.cs (FinishedLaunching method) in *.Mobile.iOS project.
+         */
+        public static string Current = "192.168.1.41";
     }
 }

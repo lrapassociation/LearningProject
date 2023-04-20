@@ -3,10 +3,12 @@ using System.Diagnostics;
 using Abp.Configuration;
 using Abp.Dependency;
 using Abp.Domain.Repositories;
+using Abp.Domain.Uow;
 using Abp.Threading;
 using Abp.Threading.BackgroundWorkers;
 using Abp.Threading.Timers;
 using Abp.Timing;
+using JetBrains.Annotations;
 using CoreOSR.Authorization.Users;
 using CoreOSR.Configuration;
 
@@ -18,14 +20,17 @@ namespace CoreOSR.MultiTenancy
         
         private readonly IRepository<Tenant> _tenantRepository;
         private readonly UserEmailer _userEmailer;
+        private readonly IUnitOfWorkManager _unitOfWorkManager; 
 
         public SubscriptionExpireEmailNotifierWorker(
             AbpTimer timer,
             IRepository<Tenant> tenantRepository,
-            UserEmailer userEmailer) : base(timer)
+            UserEmailer userEmailer, 
+            IUnitOfWorkManager unitOfWorkManager) : base(timer)
         {
             _tenantRepository = tenantRepository;
             _userEmailer = userEmailer;
+            _unitOfWorkManager = unitOfWorkManager;
 
             Timer.Period = CheckPeriodAsMilliseconds;
             Timer.RunOnStart = true;
@@ -35,28 +40,31 @@ namespace CoreOSR.MultiTenancy
 
         protected override void DoWork()
         {
-            var subscriptionRemainingDayCount = Convert.ToInt32(SettingManager.GetSettingValueForApplication(AppSettings.TenantManagement.SubscriptionExpireNotifyDayCount));
-            var dateToCheckRemainingDayCount = Clock.Now.AddDays(subscriptionRemainingDayCount).ToUniversalTime();
-
-            var subscriptionExpiredTenants = _tenantRepository.GetAllList(
-                tenant => tenant.SubscriptionEndDateUtc != null &&
-                          tenant.SubscriptionEndDateUtc.Value.Date == dateToCheckRemainingDayCount.Date &&
-                          tenant.IsActive &&
-                          tenant.EditionId != null
-            );
-
-            foreach (var tenant in subscriptionExpiredTenants)
+            _unitOfWorkManager.WithUnitOfWork(() =>
             {
-                Debug.Assert(tenant.EditionId.HasValue);
-                try
+                var subscriptionRemainingDayCount = Convert.ToInt32(SettingManager.GetSettingValueForApplication(AppSettings.TenantManagement.SubscriptionExpireNotifyDayCount));
+                var dateToCheckRemainingDayCount = Clock.Now.AddDays(subscriptionRemainingDayCount).ToUniversalTime();
+
+                var subscriptionExpiredTenants = _tenantRepository.GetAllList(
+                    tenant => tenant.SubscriptionEndDateUtc != null &&
+                              tenant.SubscriptionEndDateUtc.Value.Date == dateToCheckRemainingDayCount.Date &&
+                              tenant.IsActive &&
+                              tenant.EditionId != null
+                );
+
+                foreach (var tenant in subscriptionExpiredTenants)
                 {
-                    AsyncHelper.RunSync(() => _userEmailer.TryToSendSubscriptionExpiringSoonEmail(tenant.Id, dateToCheckRemainingDayCount));
+                    Debug.Assert(tenant.EditionId.HasValue);
+                    try
+                    {
+                        AsyncHelper.RunSync(() => _userEmailer.TryToSendSubscriptionExpiringSoonEmail(tenant.Id, dateToCheckRemainingDayCount));
+                    }
+                    catch (Exception exception)
+                    {
+                        Logger.Error(exception.Message, exception);
+                    }
                 }
-                catch (Exception exception)
-                {
-                    Logger.Error(exception.Message, exception);
-                }
-            }
+            });
         }
     }
 }

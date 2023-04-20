@@ -1,69 +1,55 @@
 var abp = abp || {};
 (function () {
-    var showMessage = function (type, message, title, isHtml, opts) {
+    var showMessage = function (type, message, title, options) {
 
-        if (!title) {
-            title = message;
-            message = undefined;
-        }
+        options = options || {};
+        options.titleText = title;
+        options.icon = type;
+        options.confirmButtonText = options.confirmButtonText || abp.localization.localize('Ok', 'CoreOSR');
 
-        opts = opts || {};
-        opts.title = title;
-        opts.type = type;
-        opts.confirmButtonText = opts.confirmButtonText || abp.localization.abpWeb('Ok');
-
-        if (isHtml) {
-            opts.html = message;
+        if (options.isHtml) {
+            options.html = message;
         } else {
-            opts.text = message;
+            options.text = message;
         }
 
-        return Swal.fire(opts);
+        const { isHtml, ...optionsSafe } = options;
+        return Swal.fire(optionsSafe);
     };
 
-    abp.message.info = function (message, title, isHtml, opts) {
-        return showMessage('info', message, title, isHtml, opts);
+    abp.message.info = function (message, title, options) {
+        return showMessage('info', message, title, options);
     };
 
-    abp.message.success = function (message, title, isHtml, opts) {
-        return showMessage('success', message, title, isHtml, opts);
+    abp.message.success = function (message, title, options) {
+        return showMessage('success', message, title, options);
     };
 
-    abp.message.warn = function (message, title, isHtml, opts) {
-        return showMessage('warning', message, title, isHtml, opts);
+    abp.message.warn = function (message, title, options) {
+        return showMessage('warning', message, title, options);
     };
 
-    abp.message.error = function (message, title, isHtml, opts) {
-        return showMessage('error', message, title, isHtml, opts);
+    abp.message.error = function (message, title, options) {
+        return showMessage('error', message, title, options);
     };
 
-    abp.message.confirm = function (message, titleOrCallback, callback, isHtml, opts) {
+    abp.message.confirm = function (message, title, callback, options) {
+        options = options || {};
+        options.title = title ? title : abp.localization.localize('AreYouSure', 'CoreOSR');
+        options.icon = 'warning';
 
-        var title = undefined;
+        options.confirmButtonText = options.confirmButtonText || abp.localization.localize('Yes', 'CoreOSR');
+        options.cancelButtonText = options.cancelButtonText || abp.localization.localize('Cancel', 'CoreOSR');
+        options.showCancelButton = true;
 
-        if (typeof titleOrCallback === "function") {
-            callback = titleOrCallback;
-        }
-        else if (titleOrCallback) {
-            title = titleOrCallback;
-        };
-
-        opts = opts || {};
-        opts.title = title ? title : abp.localization.abpWeb('AreYouSure');
-        opts.type = 'warning';
-
-        opts.confirmButtonText = opts.confirmButtonText || abp.localization.abpWeb('Yes');
-        opts.cancelButtonText = opts.cancelButtonText || abp.localization.abpWeb('Cancel');
-        opts.showCancelButton = true;
-
-        if (isHtml) {
-            opts.html = message;
+        if (options.isHtml) {
+            options.html = message;
         } else {
-            opts.text = message;
+            options.text = message;
         }
-
-        return Swal.fire(opts).then(function(result) {
-            callback && callback(result.value);
+        const { isHtml, ...optionsSafe } = options;
+        return Swal.fire(optionsSafe).then(function(result) {
+            callback && callback(result.value, result);
         });
     };
 })();

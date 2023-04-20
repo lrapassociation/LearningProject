@@ -21,18 +21,28 @@ namespace CoreOSR.Authorization.Users.Profile
 
         Task<GetProfilePictureOutput> GetProfilePicture();
 
-        Task<GetProfilePictureOutput> GetProfilePictureById(Guid profilePictureId);
+        Task<GetProfilePictureOutput> GetProfilePictureByUser(long userId);
+        
+        Task<GetProfilePictureOutput> GetProfilePictureByUserName(string username);
 
-        Task<GetProfilePictureOutput> GetFriendProfilePictureById(GetFriendProfilePictureByIdInput input);
+        Task<GetProfilePictureOutput> GetFriendProfilePicture(GetFriendProfilePictureInput input);
 
         Task ChangeLanguage(ChangeUserLanguageDto input);
-
-        Task<UpdateGoogleAuthenticatorKeyOutput> UpdateGoogleAuthenticatorKey();
-
         Task SendVerificationSms(SendVerificationSmsInputDto input);
 
         Task VerifySmsCode(VerifySmsCodeInputDto input);
 
         Task PrepareCollectedData();
+        
+        Task<GenerateGoogleAuthenticatorKeyOutput> GenerateGoogleAuthenticatorKey();
+        
+        Task<UpdateGoogleAuthenticatorKeyOutput> UpdateGoogleAuthenticatorKey(UpdateGoogleAuthenticatorKeyInput input);
+        
+        Task<bool> VerifyAuthenticatorCode(VerifyAuthenticatorCodeInput input);
+        
+        Task DisableGoogleAuthenticator(VerifyAuthenticatorCodeInput input);
+        
+        Task<UpdateGoogleAuthenticatorKeyOutput> ViewRecoveryCodes(VerifyAuthenticatorCodeInput input);
+        
     }
 }

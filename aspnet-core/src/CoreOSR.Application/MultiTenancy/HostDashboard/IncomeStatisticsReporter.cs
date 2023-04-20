@@ -20,17 +20,23 @@ namespace CoreOSR.MultiTenancy.HostDashboard
 
         private async Task<List<IncomeStastistic>> GetDailyIncomeStatisticsData(DateTime startDate, DateTime endDate)
         {
-            var dailyRecords = await _subscriptionPaymentRepository.GetAll()
+            var dailyRecords = (await _subscriptionPaymentRepository.GetAll()
                 .Where(s => s.CreationTime >= startDate &&
                             s.CreationTime <= endDate &&
                             s.Status == SubscriptionPaymentStatus.Paid)
+                .Select(payment => new
+                {
+                    payment.CreationTime,
+                    payment.Amount
+                })
+                .ToListAsync())
                 .GroupBy(s => new DateTime(s.CreationTime.Year, s.CreationTime.Month, s.CreationTime.Day))
                 .Select(s => new IncomeStastistic
-                {
-                    Date = s.First().CreationTime.Date,
-                    Amount = s.Sum(c => c.Amount)
-                })
-                .ToListAsync();
+                 {
+                     Date = s.Key.Date,
+                     Amount = s.Sum(c => c.Amount)
+                 })
+                .ToList();
 
             FillGapsInDailyIncomeStatistics(dailyRecords, startDate, endDate);
             return dailyRecords.OrderBy(s => s.Date).ToList();

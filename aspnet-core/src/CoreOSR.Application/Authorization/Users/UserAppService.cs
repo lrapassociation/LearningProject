@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Linq.Dynamic.Core;
 using System.Threading.Tasks;
@@ -18,14 +19,19 @@ using Abp.Organizations;
 using Abp.Runtime.Session;
 using Abp.UI;
 using Abp.Zero.Configuration;
+using JetBrains.Annotations;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using MiniExcelLibs;
 using CoreOSR.Authorization.Permissions;
 using CoreOSR.Authorization.Permissions.Dto;
 using CoreOSR.Authorization.Roles;
 using CoreOSR.Authorization.Users.Dto;
 using CoreOSR.Authorization.Users.Exporting;
 using CoreOSR.Dto;
+using CoreOSR.Net.Emailing;
 using CoreOSR.Notifications;
 using CoreOSR.Url;
 using CoreOSR.Organizations.Dto;
@@ -54,7 +60,9 @@ namespace CoreOSR.Authorization.Users
         private readonly UserManager _userManager;
         private readonly IRepository<UserOrganizationUnit, long> _userOrganizationUnitRepository;
         private readonly IRepository<OrganizationUnitRole, long> _organizationUnitRoleRepository;
-
+        private readonly IOptions<UserOptions> _userOptions;
+        private readonly IEmailSettingsChecker _emailSettingsChecker;
+        
         public UserAppService(
             RoleManager roleManager,
             IUserEmailer userEmailer,
@@ -72,7 +80,8 @@ namespace CoreOSR.Authorization.Users
             IRoleManagementConfig roleManagementConfig,
             UserManager userManager,
             IRepository<UserOrganizationUnit, long> userOrganizationUnitRepository,
-            IRepository<OrganizationUnitRole, long> organizationUnitRoleRepository)
+            IRepository<OrganizationUnitRole, long> organizationUnitRoleRepository, 
+            IOptions<UserOptions> userOptions, IEmailSettingsChecker emailSettingsChecker)
         {
             _roleManager = roleManager;
             _userEmailer = userEmailer;
@@ -90,11 +99,14 @@ namespace CoreOSR.Authorization.Users
             _userManager = userManager;
             _userOrganizationUnitRepository = userOrganizationUnitRepository;
             _organizationUnitRoleRepository = organizationUnitRoleRepository;
+            _userOptions = userOptions;
+            _emailSettingsChecker = emailSettingsChecker;
             _roleRepository = roleRepository;
 
             AppUrlService = NullAppUrlService.Instance;
         }
 
+        [HttpPost]
         public async Task<PagedResultDto<UserListDto>> GetUsers(GetUsersInput input)
         {
             var query = GetUsersFilteredQuery(input);
@@ -112,7 +124,7 @@ namespace CoreOSR.Authorization.Users
             return new PagedResultDto<UserListDto>(
                 userCount,
                 userListDtos
-                );
+            );
         }
 
         public async Task<FileDto> GetUsersToExcel(GetUsersToExcelInput input)
@@ -149,18 +161,24 @@ namespace CoreOSR.Authorization.Users
             {
                 Roles = userRoleDtos,
                 AllOrganizationUnits = ObjectMapper.Map<List<OrganizationUnitDto>>(allOrganizationUnits),
-                MemberedOrganizationUnits = new List<string>()
+                MemberedOrganizationUnits = new List<string>(),
+                AllowedUserNameCharacters = _userOptions.Value.AllowedUserNameCharacters,
+                IsSMTPSettingsProvided = await _emailSettingsChecker.EmailSettingsValidAsync() 
             };
 
             if (!input.Id.HasValue)
             {
-                //Creating a new user
+                // Creating a new user
                 output.User = new UserEditDto
                 {
                     IsActive = true,
                     ShouldChangePasswordOnNextLogin = true,
-                    IsTwoFactorEnabled = await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement.TwoFactorLogin.IsEnabled),
-                    IsLockoutEnabled = await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement.UserLockOut.IsEnabled)
+                    IsTwoFactorEnabled =
+                        await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement
+                            .TwoFactorLogin.IsEnabled),
+                    IsLockoutEnabled =
+                        await SettingManager.GetSettingValueAsync<bool>(AbpZeroSettingNames.UserManagement.UserLockOut
+                            .IsEnabled)
                 };
 
                 foreach (var defaultRole in await _roleManager.Roles.Where(r => r.IsDefault).ToListAsync())
@@ -188,7 +206,8 @@ namespace CoreOSR.Authorization.Users
                 foreach (var userRoleDto in userRoleDtos)
                 {
                     userRoleDto.IsAssigned = await UserManager.IsInRoleAsync(user, userRoleDto.RoleName);
-                    userRoleDto.InheritedFromOrganizationUnit = allRolesOfUsersOrganizationUnits.Contains(userRoleDto.RoleName);
+                    userRoleDto.InheritedFromOrganizationUnit =
+                        allRolesOfUsersOrganizationUnits.Contains(userRoleDto.RoleName);
                 }
             }
 
@@ -198,11 +217,11 @@ namespace CoreOSR.Authorization.Users
         private List<string> GetAllRoleNamesOfUsersOrganizationUnits(long userId)
         {
             return (from userOu in _userOrganizationUnitRepository.GetAll()
-                    join roleOu in _organizationUnitRoleRepository.GetAll() on userOu.OrganizationUnitId equals roleOu
-                        .OrganizationUnitId
-                    join userOuRoles in _roleRepository.GetAll() on roleOu.RoleId equals userOuRoles.Id
-                    where userOu.UserId == userId
-                    select userOuRoles.Name).ToList();
+                join roleOu in _organizationUnitRoleRepository.GetAll() on userOu.OrganizationUnitId equals roleOu
+                    .OrganizationUnitId
+                join userOuRoles in _roleRepository.GetAll() on roleOu.RoleId equals userOuRoles.Id
+                where userOu.UserId == userId
+                select userOuRoles.Name).ToList();
         }
 
         [AbpAuthorize(AppPermissions.Pages_Administration_Users_ChangePermissions)]
@@ -214,7 +233,8 @@ namespace CoreOSR.Authorization.Users
 
             return new GetUserPermissionsForEditOutput
             {
-                Permissions = ObjectMapper.Map<List<FlatPermissionDto>>(permissions).OrderBy(p => p.DisplayName).ToList(),
+                Permissions = ObjectMapper.Map<List<FlatPermissionDto>>(permissions).OrderBy(p => p.DisplayName)
+                    .ToList(),
                 GrantedPermissionNames = grantedPermissions.Select(p => p.Name).ToList()
             };
         }
@@ -230,7 +250,8 @@ namespace CoreOSR.Authorization.Users
         public async Task UpdateUserPermissions(UpdateUserPermissionsInput input)
         {
             var user = await UserManager.GetUserByIdAsync(input.Id);
-            var grantedPermissions = PermissionManager.GetPermissionsFromNamesByValidating(input.GrantedPermissionNames);
+            var grantedPermissions =
+                PermissionManager.GetPermissionsFromNamesByValidating(input.GrantedPermissionNames);
             await UserManager.SetGrantedPermissionsAsync(user, grantedPermissions);
         }
 
@@ -290,7 +311,7 @@ namespace CoreOSR.Authorization.Users
             }
 
             //Update roles
-            CheckErrors(await UserManager.SetRoles(user, input.AssignedRoleNames));
+            CheckErrors(await UserManager.SetRolesAsync(user, input.AssignedRoleNames));
 
             //update organization units
             await UserManager.SetOrganizationUnitsAsync(user, input.OrganizationUnits.ToArray());
@@ -412,7 +433,8 @@ namespace CoreOSR.Authorization.Users
         {
             var query = UserManager.Users
                 .WhereIf(input.Role.HasValue, u => u.Roles.Any(r => r.RoleId == input.Role.Value))
-                .WhereIf(input.OnlyLockedUsers, u => u.LockoutEndDateUtc.HasValue && u.LockoutEndDateUtc.Value > DateTime.UtcNow)
+                .WhereIf(input.OnlyLockedUsers,
+                    u => u.LockoutEndDateUtc.HasValue && u.LockoutEndDateUtc.Value > DateTime.UtcNow)
                 .WhereIf(
                     !input.Filter.IsNullOrWhiteSpace(),
                     u =>
@@ -431,20 +453,26 @@ namespace CoreOSR.Authorization.Users
 
                 input.Permissions = input.Permissions.Where(p => !string.IsNullOrEmpty(p)).ToList();
 
-                query = from user in query
-                        join ur in _userRoleRepository.GetAll() on user.Id equals ur.UserId into urJoined
-                        from ur in urJoined.DefaultIfEmpty()
-                        join urr in _roleRepository.GetAll() on ur.RoleId equals urr.Id into urrJoined
-                        from urr in urrJoined.DefaultIfEmpty()
-                        join up in _userPermissionRepository.GetAll().Where(userPermission => input.Permissions.Contains(userPermission.Name)) on user.Id equals up.UserId into upJoined
-                        from up in upJoined.DefaultIfEmpty()
-                        join rp in _rolePermissionRepository.GetAll().Where(rolePermission => input.Permissions.Contains(rolePermission.Name)) on new { RoleId = ur == null ? 0 : ur.RoleId } equals new { rp.RoleId } into rpJoined
-                        from rp in rpJoined.DefaultIfEmpty()
-                        where (up != null && up.IsGranted) ||
-                              (up == null && rp != null && rp.IsGranted) ||
-                              (up == null && rp == null && staticRoleNames.Contains(urr.Name))
-                        group user by user into userGrouped
-                        select userGrouped.Key;
+                var userIds = from user in query
+                    join ur in _userRoleRepository.GetAll() on user.Id equals ur.UserId into urJoined
+                    from ur in urJoined.DefaultIfEmpty()
+                    join urr in _roleRepository.GetAll() on ur.RoleId equals urr.Id into urrJoined
+                    from urr in urrJoined.DefaultIfEmpty()
+                    join up in _userPermissionRepository.GetAll()
+                        .Where(userPermission => input.Permissions.Contains(userPermission.Name)) on user.Id equals up.UserId into upJoined
+                    from up in upJoined.DefaultIfEmpty()
+                    join rp in _rolePermissionRepository.GetAll()
+                        .Where(rolePermission => input.Permissions.Contains(rolePermission.Name)) on
+                        new { RoleId = ur == null ? 0 : ur.RoleId } equals new { rp.RoleId } into rpJoined
+                    from rp in rpJoined.DefaultIfEmpty()
+                    where (up != null && up.IsGranted) ||
+                          (up == null && rp != null && rp.IsGranted) ||
+                          (up == null && rp == null && staticRoleNames.Contains(urr.Name))
+                    group user by user.Id
+                    into userGrouped
+                    select userGrouped.Key;
+
+                query = UserManager.Users.Where(e => userIds.Contains(e.Id));
             }
 
             return query;

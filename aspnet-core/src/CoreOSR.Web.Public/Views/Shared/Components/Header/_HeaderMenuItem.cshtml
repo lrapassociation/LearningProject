@@ -2,9 +2,14 @@
 @using Abp.Extensions
 @using System.Threading.Tasks
 @using Abp.AspNetZeroCore.Web.Url
+@using CoreOSR.Web.Navigation
 @using CoreOSR.Web.Public.Views.Shared.Components.Header
 @using CoreOSR.Web.Url
 @model CoreOSR.Web.Public.Views.Shared.Components.Header.HeaderMenuItemViewModel
+@{
+    var orderedChildMenuItems = Model.MenuItem.Items.OrderByCustom().ToList();
+}
+
 <li class="@(Model.MenuItem.Name == Model.CurrentPageName ? "active" : "") @(Model.MenuItem.Items.IsNullOrEmpty() ? "" : (Model.CurrentLevel == 0 ? "dropdown" : "dropdown-submenu"))">
     @if (Model.MenuItem.Items.IsNullOrEmpty())
     {
@@ -19,11 +24,11 @@
     }
     else
     {
-        <a class="dropdown-toggle" data-toggle="dropdown" data-target="#" href="javascript:;">
+        <a class="dropdown-toggle" data-bs-toggle="dropdown" data-target="#" href="javascript:;">
             @Model.MenuItem.DisplayName
         </a>
             <ul class="dropdown-menu">
-                @foreach (var childMenuItem in Model.MenuItem.Items)
+                @foreach (var childMenuItem in orderedChildMenuItems)
                 {
                     @await Html.PartialAsync("Components/Header/_HeaderMenuItem", new HeaderMenuItemViewModel(childMenuItem, Model.CurrentLevel + 1, Model.CurrentPageName))
                 }

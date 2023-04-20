@@ -1,5 +1,4 @@
 export class AppConsts {
-
     static readonly tenancyNamePlaceHolderInUrl = '{TENANCY_NAME}';
 
     static remoteServiceBaseUrl: string;
@@ -13,18 +12,31 @@ export class AppConsts {
     static localeMappings: any = [];
 
     static readonly userManagement = {
-        defaultAdminUserName: 'admin'
+        defaultAdminUserName: 'admin',
     };
 
     static readonly localization = {
-        defaultLocalizationSourceName: 'CoreOSR'
+        defaultLocalizationSourceName: 'CoreOSR',
     };
 
     static readonly authorization = {
-        encrptedAuthTokenName: 'enc_auth_token'
+        encrptedAuthTokenName: 'enc_auth_token',
     };
 
     static readonly grid = {
-        defaultPageSize: 10
+        defaultPageSize: 10,
     };
+
+    static readonly MinimumUpgradePaymentAmount = 1;
+
+    /// <summary>
+    /// Gets current version of the application.
+    /// It's also shown in the web page.
+    /// </summary>
+    static readonly WebAppGuiVersion = '12.1.0';
+
+    /// <summary>
+    /// Redirects users to host URL when using subdomain as tenancy name for not existing tenants
+    /// </summary>
+    static readonly PreventNotExistingTenantSubdomains = false;
 }

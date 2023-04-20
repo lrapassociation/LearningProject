@@ -5,7 +5,9 @@ using Abp.Authorization;
 using Abp.Collections.Extensions;
 using Abp.Extensions;
 using Abp.Linq.Extensions;
+using Abp.Runtime.Session;
 using Microsoft.EntityFrameworkCore;
+using CoreOSR.Authorization;
 using CoreOSR.Common.Dto;
 using CoreOSR.Editions;
 using CoreOSR.Editions.Dto;
@@ -33,6 +35,7 @@ namespace CoreOSR.Common
             );
         }
 
+        [AbpAuthorize(AppPermissions.Pages_Administration_Users)]
         public async Task<PagedResultDto<NameValueDto>> FindUsers(FindUsersInput input)
         {
             if (AbpSession.TenantId != null)
@@ -51,7 +54,7 @@ namespace CoreOSR.Common
                             u.Surname.Contains(input.Filter) ||
                             u.UserName.Contains(input.Filter) ||
                             u.EmailAddress.Contains(input.Filter)
-                    );
+                    ).WhereIf(input.ExcludeCurrentUser, u => u.Id != AbpSession.GetUserId());
 
                 var userCount = await query.CountAsync();
                 var users = await query

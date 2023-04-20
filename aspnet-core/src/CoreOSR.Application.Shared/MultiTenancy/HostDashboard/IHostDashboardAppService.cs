@@ -6,7 +6,11 @@ namespace CoreOSR.MultiTenancy.HostDashboard
 {
     public interface IHostDashboardAppService : IApplicationService
     {
-        Task<HostDashboardData> GetDashboardStatisticsData(GetDashboardDataInput input);
+        Task<TopStatsData> GetTopStatsData(GetTopStatsInput input);
+
+        Task<GetRecentTenantsOutput> GetRecentTenantsData();
+
+        Task<GetExpiringTenantsOutput> GetSubscriptionExpiringTenantsData();
 
         Task<GetIncomeStatisticsDataOutput> GetIncomeStatistics(GetIncomeStatisticsDataInput input);
 

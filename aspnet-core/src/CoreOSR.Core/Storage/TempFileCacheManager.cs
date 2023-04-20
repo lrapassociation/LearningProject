@@ -5,23 +5,34 @@ namespace CoreOSR.Storage
 {
     public class TempFileCacheManager : ITempFileCacheManager
     {
-        public const string TempFileCacheName = "TempFileCacheName";
+        private const string TempFileCacheName = "TempFileCacheName";
 
-        private readonly ICacheManager _cacheManager;
+        private readonly ITypedCache<string, TempFileInfo> _cache;
 
         public TempFileCacheManager(ICacheManager cacheManager)
         {
-            _cacheManager = cacheManager;
+            _cache = cacheManager.GetCache<string, TempFileInfo>(TempFileCacheName);
         }
 
         public void SetFile(string token, byte[] content)
         {
-            _cacheManager.GetCache(TempFileCacheName).Set(token, content, new TimeSpan(0, 0, 1, 0)); // expire time is 1 min by default
+            _cache.Set(token, new TempFileInfo(content), TimeSpan.FromMinutes(1)); // expire time is 1 min by default
         }
 
         public byte[] GetFile(string token)
         {
-            return _cacheManager.GetCache(TempFileCacheName).Get(token, ep => ep) as byte[];
+            var cache = _cache.GetOrDefault(token);
+            return cache?.File;
+        }
+
+        public void SetFile(string token, TempFileInfo info)
+        {
+            _cache.Set(token, info, TimeSpan.FromMinutes(1)); // expire time is 1 min by default
+        }
+
+        public TempFileInfo GetFileInfo(string token)
+        {
+            return _cache.GetOrDefault(token);
         }
     }
 }

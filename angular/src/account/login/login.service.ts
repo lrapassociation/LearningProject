@@ -1,29 +1,37 @@
-import { TokenService } from '@abp/auth/token.service';
-import { LogService } from '@abp/log/log.service';
-import { MessageService } from '@abp/message/message.service';
-import { UtilsService } from '@abp/utils/utils.service';
+import { TokenService, LogService, MessageService, LocalizationService } from 'abp-ng2-module';
 import { Injectable } from '@angular/core';
 import { Router } from '@angular/router';
 import { AppConsts } from '@shared/AppConsts';
 import { UrlHelper } from '@shared/helpers/UrlHelper';
-import { AuthenticateModel, AuthenticateResultModel, ExternalAuthenticateModel, ExternalAuthenticateResultModel, ExternalLoginProviderInfoModel, TokenAuthServiceProxy } from '@shared/service-proxies/service-proxies';
+import {
+    AuthenticateModel,
+    AuthenticateResultModel,
+    ExternalAuthenticateModel,
+    ExternalAuthenticateResultModel,
+    ExternalLoginProviderInfoModel,
+    TokenAuthServiceProxy,
+    TwitterServiceProxy,
+} from '@shared/service-proxies/service-proxies';
 import { ScriptLoaderService } from '@shared/utils/script-loader.service';
-import * as _ from 'lodash';
+import { map as _map, filter as _filter } from 'lodash-es';
 import { finalize } from 'rxjs/operators';
 import { OAuthService, AuthConfig } from 'angular-oauth2-oidc';
 import * as AuthenticationContext from 'adal-angular/lib/adal';
+import { NgxSpinnerService } from 'ngx-spinner';
+import { LocalStorageService } from '@shared/utils/local-storage.service';
+import { AuthenticationResult, PublicClientApplication } from '@azure/msal-browser';
 
 declare const FB: any; // Facebook API
-declare const gapi: any; // Facebook API
-declare const WL: any; // Microsoft API
+declare const gapi: any; // google API
+declare const google: any; // google
 
 export class ExternalLoginProvider extends ExternalLoginProviderInfoModel {
-
     static readonly FACEBOOK: string = 'Facebook';
     static readonly GOOGLE: string = 'Google';
     static readonly MICROSOFT: string = 'Microsoft';
     static readonly OPENID: string = 'OpenIdConnect';
     static readonly WSFEDERATION: string = 'WsFederation';
+    static readonly TWITTER: string = 'Twitter';
 
     icon: string;
     initialized = false;
@@ -36,12 +44,10 @@ export class ExternalLoginProvider extends ExternalLoginProviderInfoModel {
         this.additionalParams = providerInfo.additionalParams;
         this.icon = providerInfo.name.toLowerCase();
     }
-
 }
 
 @Injectable()
 export class LoginService {
-
     static readonly twoFactorRememberClientTokenName = 'TwoFactorRememberClientToken';
 
     authenticateModel: AuthenticateModel;
@@ -50,57 +56,283 @@ export class LoginService {
     rememberMe: boolean;
 
     wsFederationAuthenticationContext: any;
+    localizationSourceName = AppConsts.localization.defaultLocalizationSourceName;
+
+    localization: LocalizationService;
+    private MSAL: PublicClientApplication;
 
     constructor(
         private _tokenAuthService: TokenAuthServiceProxy,
         private _router: Router,
-        private _utilsService: UtilsService,
         private _messageService: MessageService,
         private _tokenService: TokenService,
         private _logService: LogService,
-        private oauthService: OAuthService
+        private oauthService: OAuthService,
+        private spinnerService: NgxSpinnerService,
+        private _localStorageService: LocalStorageService,
+        private _twitterService: TwitterServiceProxy
     ) {
         this.clear();
     }
 
     authenticate(finallyCallback?: () => void, redirectUrl?: string, captchaResponse?: string): void {
-        finallyCallback = finallyCallback || (() => {
-            abp.ui.clearBusy();
-        });
+        finallyCallback =
+            finallyCallback ||
+            (() => {
+                this.spinnerService.hide();
+            });
 
-        // We may switch to localStorage instead of cookies
-        this.authenticateModel.twoFactorRememberClientToken = this._utilsService.getCookieValue(LoginService.twoFactorRememberClientTokenName);
-        this.authenticateModel.singleSignIn = UrlHelper.getSingleSignIn();
-        this.authenticateModel.returnUrl = UrlHelper.getReturnUrl();
-        this.authenticateModel.captchaResponse = captchaResponse;
+        const self = this;
+        this._localStorageService.getItem(LoginService.twoFactorRememberClientTokenName, function (err, value) {
+            self.authenticateModel.twoFactorRememberClientToken = value?.token;
+            self.authenticateModel.singleSignIn = UrlHelper.getSingleSignIn();
+            self.authenticateModel.returnUrl = UrlHelper.getReturnUrl();
+            self.authenticateModel.captchaResponse = captchaResponse;
 
-        this._tokenAuthService
-            .authenticate(this.authenticateModel)
-            .subscribe({
+            self._tokenAuthService.authenticate(self.authenticateModel).subscribe({
                 next: (result: AuthenticateResultModel) => {
-                    this.processAuthenticateResult(result, redirectUrl);
+                    self.processAuthenticateResult(result, redirectUrl);
                     finallyCallback();
                 },
                 error: (err: any) => {
                     finallyCallback();
-                }
+                },
             });
+        });
+    }
+
+    ensureExternalLoginProviderInitialized(loginProvider: ExternalLoginProvider, callback: () => void) {
+        if (loginProvider.initialized) {
+            callback();
+            return;
+        }
+
+        if (loginProvider.name === ExternalLoginProvider.FACEBOOK) {
+            new ScriptLoaderService().load('//connect.facebook.net/en_US/sdk.js').then(() => {
+                FB.init({
+                    appId: loginProvider.clientId,
+                    cookie: false,
+                    xfbml: true,
+                    version: 'v2.5',
+                });
+
+                FB.getLoginStatus((response) => {
+                    this.facebookLoginStatusChangeCallback(response);
+                    if (response.status !== 'connected') {
+                        callback();
+                    }
+                });
+            });
+        } else if (loginProvider.name === ExternalLoginProvider.GOOGLE) {
+            new ScriptLoaderService()
+                .load(
+                    'https://apis.google.com/js/api.js',
+                    'https://accounts.google.com/gsi/client'                    
+                )
+                .then(() => {
+                    gapi.load('client', () => {
+                        gapi.client
+                            .init({})
+                            .then(() => {       
+                                gapi.client.load('oauth2', 'v2', ()=>{
+                                    callback();                                
+                                });                                               
+                            });
+                    });
+                });
+        } else if (loginProvider.name === ExternalLoginProvider.MICROSOFT) {
+            this.MSAL = new PublicClientApplication({
+                auth: {
+                    clientId: loginProvider.clientId,
+                    redirectUri: AppConsts.appBaseUrl,
+                },
+            });
+            callback();
+        } else if (loginProvider.name === ExternalLoginProvider.OPENID) {
+            const authConfig = this.getOpenIdConnectConfig(loginProvider);
+            this.oauthService.configure(authConfig);
+            this.oauthService.initLoginFlow('openIdConnect=1');
+        } else if (loginProvider.name === ExternalLoginProvider.WSFEDERATION) {
+            let config = this.getWsFederationConnectConfig(loginProvider);
+            this.wsFederationAuthenticationContext = new AuthenticationContext(config);
+            this.wsFederationAuthenticationContext.login();
+        } else if (loginProvider.name === ExternalLoginProvider.TWITTER) {
+            callback();
+        }
+    }
+
+    public twitterLoginCallback(token: string, verifier: string) {
+        this.spinnerService.show();
+
+        this._twitterService.getAccessToken(token, verifier).subscribe((response) => {
+            const model = new ExternalAuthenticateModel();
+            model.authProvider = ExternalLoginProvider.TWITTER;
+            model.providerAccessCode = response.accessToken + '&' + response.accessTokenSecret;
+            model.providerKey = response.userId;
+            model.singleSignIn = UrlHelper.getSingleSignIn();
+            model.returnUrl = UrlHelper.getReturnUrl();
+
+            this._tokenAuthService
+                .externalAuthenticate(model)
+                .pipe(
+                    finalize(() => {
+                        this.spinnerService.hide();
+                    })
+                )
+                .subscribe((result: ExternalAuthenticateResultModel) => {
+                    if (result.waitingForActivation) {
+                        this._messageService.info('You have successfully registered. Waiting for activation!');
+                        return;
+                    }
+
+                    this.login(
+                        result.accessToken,
+                        result.encryptedAccessToken,
+                        result.expireInSeconds,
+                        result.refreshToken,
+                        result.refreshTokenExpireInSeconds,
+                        false,
+                        '',
+                        result.returnUrl
+                    );
+                });
+        });
+    }
+
+    public wsFederationLoginStatusChangeCallback(errorDesc, token, error, tokenType) {
+        let user = this.wsFederationAuthenticationContext.getCachedUser();
+
+        const model = new ExternalAuthenticateModel();
+        model.authProvider = ExternalLoginProvider.WSFEDERATION;
+        model.providerAccessCode = token;
+        model.providerKey = user.profile.sub;
+        model.singleSignIn = UrlHelper.getSingleSignIn();
+        model.returnUrl = UrlHelper.getReturnUrl();
+
+        this._tokenAuthService.externalAuthenticate(model).subscribe((result: ExternalAuthenticateResultModel) => {
+            if (result.waitingForActivation) {
+                this._messageService.info('You have successfully registered. Waiting for activation!');
+                this._router.navigate(['account/login']);
+                return;
+            }
+
+            this.login(
+                result.accessToken,
+                result.encryptedAccessToken,
+                result.expireInSeconds,
+                result.refreshToken,
+                result.refreshTokenExpireInSeconds,
+                false,
+                '',
+                result.returnUrl
+            );
+        });
+    }
+
+    public openIdConnectLoginCallback(resp) {
+        this.initExternalLoginProviders(() => {
+            let openIdProvider = _filter(this.externalLoginProviders, {
+                name: 'OpenIdConnect',
+            })[0];
+            let authConfig = this.getOpenIdConnectConfig(openIdProvider);
+
+            this.oauthService.configure(authConfig);
+            this.spinnerService.show();
+
+            this.oauthService.loadDiscoveryDocumentAndTryLogin().then(() => {
+                let claims = this.oauthService.getIdentityClaims();
+
+                const model = new ExternalAuthenticateModel();
+                model.authProvider = ExternalLoginProvider.OPENID;
+                model.providerAccessCode = this.oauthService.getIdToken();
+                model.providerKey = claims['sub'];
+                model.singleSignIn = UrlHelper.getSingleSignIn();
+                model.returnUrl = UrlHelper.getReturnUrl();
+
+                this._tokenAuthService
+                    .externalAuthenticate(model)
+                    .pipe(
+                        finalize(() => {
+                            this.spinnerService.hide();
+                        })
+                    )
+                    .subscribe((result: ExternalAuthenticateResultModel) => {
+                        if (result.waitingForActivation) {
+                            this._messageService.info('You have successfully registered. Waiting for activation!');
+                            return;
+                        }
+
+                        this.login(
+                            result.accessToken,
+                            result.encryptedAccessToken,
+                            result.expireInSeconds,
+                            result.refreshToken,
+                            result.refreshTokenExpireInSeconds,
+                            false,
+                            '',
+                            result.returnUrl
+                        );
+                    });
+            });
+        });
     }
 
     externalAuthenticate(provider: ExternalLoginProvider): void {
         this.ensureExternalLoginProviderInitialized(provider, () => {
             if (provider.name === ExternalLoginProvider.FACEBOOK) {
-                FB.login(response => {
-                    this.facebookLoginStatusChangeCallback(response);
-                }, { scope: 'email' });
+                FB.login(
+                    (response) => {
+                        this.facebookLoginStatusChangeCallback(response);
+                    },
+                    { scope: 'email' }
+                );
             } else if (provider.name === ExternalLoginProvider.GOOGLE) {
-                gapi.auth2.getAuthInstance().signIn().then(() => {
-                    this.googleLoginStatusChangeCallback(gapi.auth2.getAuthInstance().isSignedIn.get());
+                let gisGoogleTokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: provider.clientId,
+                    scope: 'openid profile email',
+                    callback: (resp) => {
+                        if (resp.error !== undefined) {
+                          throw(resp);
+                        }
+                        
+                        // GIS has automatically updated gapi.client with the newly issued access token
+                        this.googleLoginStatusChangeCallback(resp);
+                      }
                 });
+                  
+                // Conditionally ask users to select the Google Account they'd like to use,
+                // and explicitly obtain their consent to fetch their Calendar.
+                // NOTE: To request an access token a user gesture is necessary.
+                if (gapi.client.getToken() === null) {
+                    // Prompt the user to select an Google Account and asked for consent to share their data
+                    // when establishing a new session.
+                    gisGoogleTokenClient.requestAccessToken({prompt: 'consent'});
+                } else {
+                    // Skip display of account chooser and consent dialog for an existing session.
+                    gisGoogleTokenClient.requestAccessToken({prompt: ''});
+                }
+
             } else if (provider.name === ExternalLoginProvider.MICROSOFT) {
-                WL.login({
-                    scope: ['wl.signin', 'wl.basic', 'wl.emails']
+                let scopes = ['user.read'];
+                this.spinnerService.show();
+                this.MSAL.loginPopup({
+                    scopes: scopes,
+                }).then((idTokenResponse: AuthenticationResult) => {
+                    this.MSAL.acquireTokenSilent({
+                        account: this.MSAL.getAllAccounts()[0],
+                        scopes: scopes
+                    }).then((accessTokenResponse: AuthenticationResult) => {
+                        this.microsoftLoginCallback(accessTokenResponse);
+                        this.spinnerService.hide();
+                    }).catch((error) => {
+                        abp.log.error(error);
+                        abp.message.error(
+                            this.localization.localize('CouldNotValidateExternalUser', this.localizationSourceName)
+                        );
+                    });
                 });
+            } else if (provider.name === ExternalLoginProvider.TWITTER) {
+                this.startTwitterLogin();
             }
         });
     }
@@ -117,19 +349,15 @@ export class LoginService {
 
             this._router.navigate(['account/reset-password'], {
                 queryParams: {
-                    userId: authenticateResult.userId,
-                    tenantId: abp.session.tenantId,
-                    resetCode: authenticateResult.passwordResetCode
-                }
+                    c: authenticateResult.c,
+                },
             });
 
             this.clear();
-
         } else if (authenticateResult.requiresTwoFactorVerification) {
             // Two factor authentication
 
             this._router.navigate(['account/send-code']);
-
         } else if (authenticateResult.accessToken) {
             // Successfully logged in
 
@@ -141,45 +369,68 @@ export class LoginService {
                 authenticateResult.accessToken,
                 authenticateResult.encryptedAccessToken,
                 authenticateResult.expireInSeconds,
+                authenticateResult.refreshToken,
+                authenticateResult.refreshTokenExpireInSeconds,
                 this.rememberMe,
                 authenticateResult.twoFactorRememberClientToken,
                 redirectUrl
             );
-
         } else {
             // Unexpected result!
 
             this._logService.warn('Unexpected authenticateResult!');
             this._router.navigate(['account/login']);
-
         }
     }
 
-    private login(accessToken: string, encryptedAccessToken: string, expireInSeconds: number, rememberMe?: boolean, twoFactorRememberClientToken?: string, redirectUrl?: string): void {
+    private login(
+        accessToken: string,
+        encryptedAccessToken: string,
+        expireInSeconds: number,
+        refreshToken: string,
+        refreshTokenExpireInSeconds: number,
+        rememberMe?: boolean,
+        twoFactorRememberClientToken?: string,
+        redirectUrl?: string
+    ): void {
+        let tokenExpireDate = rememberMe ? new Date(new Date().getTime() + 1000 * expireInSeconds) : undefined;
 
-        let tokenExpireDate = rememberMe ? (new Date(new Date().getTime() + 1000 * expireInSeconds)) : undefined;
+        this._tokenService.setToken(accessToken, tokenExpireDate);
 
-        this._tokenService.setToken(
-            accessToken,
-            tokenExpireDate
-        );
-
-        this._utilsService.setCookieValue(
-            AppConsts.authorization.encrptedAuthTokenName,
-            encryptedAccessToken,
-            tokenExpireDate,
-            abp.appPath
-        );
-
-        if (twoFactorRememberClientToken) {
-            this._utilsService.setCookieValue(
-                LoginService.twoFactorRememberClientTokenName,
-                twoFactorRememberClientToken,
-                new Date(new Date().getTime() + 365 * 86400000), // 1 year
-                abp.appPath
-            );
+        if (refreshToken && rememberMe) {
+            let refreshTokenExpireDate = rememberMe
+                ? new Date(new Date().getTime() + 1000 * refreshTokenExpireInSeconds)
+                : undefined;
+            this._tokenService.setRefreshToken(refreshToken, refreshTokenExpireDate);
         }
 
+        let self = this;
+        this._localStorageService.setItem(
+            AppConsts.authorization.encrptedAuthTokenName,
+            {
+                token: encryptedAccessToken,
+                expireDate: tokenExpireDate,
+            },
+            () => {
+                if (twoFactorRememberClientToken) {
+                    self._localStorageService.setItem(
+                        LoginService.twoFactorRememberClientTokenName,
+                        {
+                            token: twoFactorRememberClientToken,
+                            expireDate: new Date(new Date().getTime() + 365 * 86400000), // 1 year
+                        },
+                        () => {
+                            self.redirectToLoginResult(redirectUrl);
+                        }
+                    );
+                } else {
+                    self.redirectToLoginResult(redirectUrl);
+                }
+            }
+        );
+    }
+
+    private redirectToLoginResult(redirectUrl?: string): void {
         if (redirectUrl) {
             location.href = redirectUrl;
         } else {
@@ -204,74 +455,18 @@ export class LoginService {
         this._tokenAuthService
             .getExternalAuthenticationProviders()
             .subscribe((providers: ExternalLoginProviderInfoModel[]) => {
-                this.externalLoginProviders = _.map(providers, p => new ExternalLoginProvider(p));
-
+                this.externalLoginProviders = _map(providers, (p) => new ExternalLoginProvider(p));
                 if (callback) {
                     callback();
                 }
             });
     }
 
-    ensureExternalLoginProviderInitialized(loginProvider: ExternalLoginProvider, callback: () => void) {
-        if (loginProvider.initialized) {
-            callback();
-            return;
-        }
-
-        if (loginProvider.name === ExternalLoginProvider.FACEBOOK) {
-            new ScriptLoaderService().load('//connect.facebook.net/en_US/sdk.js').then(() => {
-                FB.init({
-                    appId: loginProvider.clientId,
-                    cookie: false,
-                    xfbml: true,
-                    version: 'v2.5'
-                });
-
-                FB.getLoginStatus(response => {
-                    this.facebookLoginStatusChangeCallback(response);
-                    if (response.status !== 'connected') {
-                        callback();
-                    }
-                });
-            });
-        } else if (loginProvider.name === ExternalLoginProvider.GOOGLE) {
-            new ScriptLoaderService().load('https://apis.google.com/js/api.js').then(() => {
-                gapi.load('client:auth2',
-                    () => {
-                        gapi.client.init({
-                            clientId: loginProvider.clientId,
-                            scope: 'openid profile email'
-                        }).then(() => {
-                            callback();
-                        });
-                    });
-            });
-        } else if (loginProvider.name === ExternalLoginProvider.MICROSOFT) {
-            new ScriptLoaderService().load('//js.live.net/v5.0/wl.js').then(() => {
-                WL.Event.subscribe('auth.login', this.microsoftLogin);
-                WL.init({
-                    client_id: loginProvider.clientId,
-                    scope: ['wl.signin', 'wl.basic', 'wl.emails'],
-                    redirect_uri: AppConsts.appBaseUrl,
-                    response_type: 'token'
-                });
-            });
-        } else if (loginProvider.name === ExternalLoginProvider.OPENID) {
-            const authConfig = this.getOpenIdConnectConfig(loginProvider);
-            this.oauthService.configure(authConfig);
-            this.oauthService.initImplicitFlow('openIdConnect=1');
-        } else if (loginProvider.name === ExternalLoginProvider.WSFEDERATION) {
-            let config = this.getWsFederationConnectConfig(loginProvider);
-            this.wsFederationAuthenticationContext = new AuthenticationContext(config);
-            this.wsFederationAuthenticationContext.login();
-        }
-    }
-
     private getWsFederationConnectConfig(loginProvider: ExternalLoginProvider): any {
         let config = {
             clientId: loginProvider.clientId,
             popUp: true,
-            callback: this.wsFederationLoginStatusChangeCallback.bind(this)
+            callback: this.wsFederationLoginStatusChangeCallback.bind(this),
         } as any;
 
         if (loginProvider.additionalParams['Tenant']) {
@@ -287,7 +482,8 @@ export class LoginService {
         authConfig.issuer = loginProvider.additionalParams['Authority'];
         authConfig.skipIssuerCheck = loginProvider.additionalParams['ValidateIssuer'] === 'false';
         authConfig.clientId = loginProvider.clientId;
-        authConfig.responseType = 'id_token';
+        authConfig.responseType = loginProvider.additionalParams['ResponseType'];
+        authConfig.strictDiscoveryDocumentValidation = false;
         authConfig.redirectUri = window.location.origin + '/account/login';
         authConfig.scope = 'openid profile';
         authConfig.requestAccessToken = false;
@@ -303,114 +499,101 @@ export class LoginService {
             model.singleSignIn = UrlHelper.getSingleSignIn();
             model.returnUrl = UrlHelper.getReturnUrl();
 
-            this._tokenAuthService.externalAuthenticate(model)
-                .subscribe((result: ExternalAuthenticateResultModel) => {
-                    if (result.waitingForActivation) {
-                        this._messageService.info('You have successfully registered. Waiting for activation!');
-                        return;
-                    }
+            this._tokenAuthService.externalAuthenticate(model).subscribe((result: ExternalAuthenticateResultModel) => {
+                if (result.waitingForActivation) {
+                    this._messageService.info('You have successfully registered. Waiting for activation!');
+                    return;
+                }
 
-                    this.login(result.accessToken, result.encryptedAccessToken, result.expireInSeconds, false, '', result.returnUrl);
-                });
+                this.login(
+                    result.accessToken,
+                    result.encryptedAccessToken,
+                    result.expireInSeconds,
+                    result.refreshToken,
+                    result.refreshTokenExpireInSeconds,
+                    false,
+                    '',
+                    result.returnUrl
+                );
+            });
         }
     }
 
-    public openIdConnectLoginCallback(resp) {
-        this.initExternalLoginProviders(() => {
-            let openIdProvider = _.filter(this.externalLoginProviders, { name: 'OpenIdConnect' })[0];
-            let authConfig = this.getOpenIdConnectConfig(openIdProvider);
-
-            this.oauthService.configure(authConfig);
-
-            abp.ui.setBusy();
-
-            this.oauthService.tryLogin().then(() => {
-                let claims = this.oauthService.getIdentityClaims();
-
-                const model = new ExternalAuthenticateModel();
-                model.authProvider = ExternalLoginProvider.OPENID;
-                model.providerAccessCode = this.oauthService.getIdToken();
-                model.providerKey = claims['sub'];
-                model.singleSignIn = UrlHelper.getSingleSignIn();
-                model.returnUrl = UrlHelper.getReturnUrl();
-
-                this._tokenAuthService.externalAuthenticate(model)
-                    .pipe(finalize(() => { abp.ui.clearBusy(); }))
-                    .subscribe((result: ExternalAuthenticateResultModel) => {
-                        if (result.waitingForActivation) {
-                            this._messageService.info('You have successfully registered. Waiting for activation!');
-                            return;
-                        }
-
-                        this.login(result.accessToken, result.encryptedAccessToken, result.expireInSeconds, false, '', result.returnUrl);
-                    });
+    private startTwitterLogin() {
+        this.spinnerService.show();
+        this._twitterService
+            .getRequestToken()
+            .pipe(finalize(() => this.spinnerService.hide()))
+            .subscribe((result) => {
+                if (result.confirmed) {
+                    window.location.href = result.redirectUrl;
+                } else {
+                    this._messageService.error('Couldn\'t get twitter request token !');
+                }
             });
-        });
     }
 
-    private googleLoginStatusChangeCallback(isSignedIn) {
-        if (isSignedIn) {
+    private googleLoginStatusChangeCallback(response) {
+        if (response.error !== undefined) {
+            return;
+        }
+        var _$this=this;
+
+        gapi.client.oauth2.userinfo.get().execute(function(resp) {
             const model = new ExternalAuthenticateModel();
             model.authProvider = ExternalLoginProvider.GOOGLE;
-            model.providerAccessCode = gapi.auth2.getAuthInstance().currentUser.get().getAuthResponse().access_token;
-            model.providerKey = gapi.auth2.getAuthInstance().currentUser.get().getBasicProfile().getId();
+            model.providerAccessCode = response.access_token;
+            model.providerKey = resp.id;
             model.singleSignIn = UrlHelper.getSingleSignIn();
             model.returnUrl = UrlHelper.getReturnUrl();
 
-            this._tokenAuthService.externalAuthenticate(model)
-                .subscribe((result: ExternalAuthenticateResultModel) => {
-                    if (result.waitingForActivation) {
-                        this._messageService.info('You have successfully registered. Waiting for activation!');
-                        return;
-                    }
-
-                    this.login(result.accessToken, result.encryptedAccessToken, result.expireInSeconds, false, '', result.returnUrl);
-                });
-        }
-    }
-
-    public wsFederationLoginStatusChangeCallback(errorDesc, token, error, tokenType) {
-        let user = this.wsFederationAuthenticationContext.getCachedUser();
-
-        const model = new ExternalAuthenticateModel();
-        model.authProvider = ExternalLoginProvider.WSFEDERATION;
-        model.providerAccessCode = token;
-        model.providerKey = user.profile.sub;
-        model.singleSignIn = UrlHelper.getSingleSignIn();
-        model.returnUrl = UrlHelper.getReturnUrl();
-
-        this._tokenAuthService.externalAuthenticate(model)
-            .subscribe((result: ExternalAuthenticateResultModel) => {
+            _$this._tokenAuthService.externalAuthenticate(model).subscribe((result: ExternalAuthenticateResultModel) => {
                 if (result.waitingForActivation) {
-                    this._messageService.info('You have successfully registered. Waiting for activation!');
-                    this._router.navigate(['account/login']);
+                    _$this._messageService.info('You have successfully registered. Waiting for activation!');
                     return;
                 }
 
-                this.login(result.accessToken, result.encryptedAccessToken, result.expireInSeconds, false, '', result.returnUrl);
-            });
+                _$this.login(
+                    result.accessToken,
+                    result.encryptedAccessToken,
+                    result.expireInSeconds,
+                    result.refreshToken,
+                    result.refreshTokenExpireInSeconds,
+                    false,
+                    '',
+                    result.returnUrl
+                );
+            });          
+          })      
     }
 
-    /**
-    * Microsoft login is not completed yet, because of an error thrown by zone.js: https://github.com/angular/zone.js/issues/290
-    */
-    private microsoftLogin() {
-        this._logService.debug(WL.getSession());
+    private microsoftLoginCallback(response: AuthenticationResult) {
         const model = new ExternalAuthenticateModel();
         model.authProvider = ExternalLoginProvider.MICROSOFT;
-        model.providerAccessCode = WL.getSession().access_token;
-        model.providerKey = WL.getSession().id; // How to get id?
+        model.providerAccessCode = response.accessToken;
+        model.providerKey = response.uniqueId;
         model.singleSignIn = UrlHelper.getSingleSignIn();
         model.returnUrl = UrlHelper.getReturnUrl();
 
-        this._tokenAuthService.externalAuthenticate(model)
-            .subscribe((result: ExternalAuthenticateResultModel) => {
-                if (result.waitingForActivation) {
-                    this._messageService.info('You have successfully registered. Waiting for activation!');
-                    return;
-                }
+        this.spinnerService.show();
 
-                this.login(result.accessToken, result.encryptedAccessToken, result.expireInSeconds, false, '', result.returnUrl);
-            });
+        this._tokenAuthService.externalAuthenticate(model).subscribe((result: ExternalAuthenticateResultModel) => {
+            if (result.waitingForActivation) {
+                this._messageService.info('You have successfully registered. Waiting for activation!');
+                return;
+            }
+
+            this.login(
+                result.accessToken,
+                result.encryptedAccessToken,
+                result.expireInSeconds,
+                result.refreshToken,
+                result.refreshTokenExpireInSeconds,
+                false,
+                '',
+                result.returnUrl
+            );
+            this.spinnerService.hide();
+        });
     }
 }

@@ -1,4 +1,5 @@
 ﻿using Abp.Application.Services.Dto;
+using CoreOSR.Editions;
 
 namespace CoreOSR.MultiTenancy.Payments.Dto
 {
@@ -35,5 +36,7 @@ namespace CoreOSR.MultiTenancy.Payments.Dto
         public string SuccessUrl { get; set; }
 
         public string ErrorUrl { get; set; }
+
+        public EditionPaymentType EditionPaymentType { get; set; }
     }
 }

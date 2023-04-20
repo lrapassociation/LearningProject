@@ -1,21 +1,24 @@
 import { Component, EventEmitter, Injector, Output, ViewChild } from '@angular/core';
 import { AppEditionExpireAction } from '@shared/AppEnums';
 import { AppComponentBase } from '@shared/common/app-component-base';
-import { ComboboxItemDto, CommonLookupServiceProxy, CreateEditionDto, EditionServiceProxy } from '@shared/service-proxies/service-proxies';
-import { ModalDirective } from 'ngx-bootstrap';
+import {
+    ComboboxItemDto,
+    CommonLookupServiceProxy,
+    CreateEditionDto,
+    EditionServiceProxy,
+} from '@shared/service-proxies/service-proxies';
+import { ModalDirective } from 'ngx-bootstrap/modal';
 import { FeatureTreeComponent } from '../shared/feature-tree.component';
 import { finalize } from 'rxjs/operators';
 import createNumberMask from 'text-mask-addons/dist/createNumberMask';
 
-
 @Component({
     selector: 'createEditionModal',
-    templateUrl: './create-edition-modal.component.html'
+    templateUrl: './create-edition-modal.component.html',
 })
 export class CreateEditionModalComponent extends AppComponentBase {
-
-    @ViewChild('createModal', {static: true}) modal: ModalDirective;
-    @ViewChild('featureTree', {static: false}) featureTree: FeatureTreeComponent;
+    @ViewChild('createModal', { static: true }) modal: ModalDirective;
+    @ViewChild('featureTree') featureTree: FeatureTreeComponent;
 
     @Output() modalSave: EventEmitter<any> = new EventEmitter<any>();
 
@@ -23,7 +26,7 @@ export class CreateEditionModalComponent extends AppComponentBase {
     saving = false;
     currencyMask = createNumberMask({
         prefix: '',
-        allowDecimal: true
+        allowDecimal: true,
     });
 
     edition: CreateEditionDto = new CreateEditionDto();
@@ -46,11 +49,13 @@ export class CreateEditionModalComponent extends AppComponentBase {
     show(editionId?: number): void {
         this.active = true;
 
-        this._commonLookupService.getEditionsForCombobox(true).subscribe(editionsResult => {
+        this._commonLookupService.getEditionsForCombobox(true).subscribe((editionsResult) => {
             this.expiringEditions = editionsResult.items;
-            this.expiringEditions.unshift(new ComboboxItemDto({ value: null, displayText: this.l('NotAssigned'), isSelected: true }));
+            this.expiringEditions.unshift(
+                new ComboboxItemDto({ value: null, displayText: this.l('NotAssigned'), isSelected: true })
+            );
 
-            this._editionService.getEditionForEdit(editionId).subscribe(editionResult => {
+            this._editionService.getEditionForEdit(editionId).subscribe((editionResult) => {
                 this.featureTree.editData = editionResult;
                 this.modal.show();
             });
@@ -80,9 +85,14 @@ export class CreateEditionModalComponent extends AppComponentBase {
         input.edition = this.edition.edition;
         input.featureValues = this.featureTree.getGrantedFeatures();
 
+        if(!this.isTrialActive){
+            this.edition.edition.trialDayCount = null;
+        }
+
         this.saving = true;
-        this._editionService.createEdition(input)
-            .pipe(finalize(() => this.saving = false))
+        this._editionService
+            .createEdition(input)
+            .pipe(finalize(() => (this.saving = false)))
             .subscribe(() => {
                 this.notify.info(this.l('SavedSuccessfully'));
                 this.close();

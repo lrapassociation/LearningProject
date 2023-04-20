@@ -1,15 +1,42 @@
-<div id="kt_aside_brand" class="kt-aside__brand kt-grid__item">
-    <div class="kt-aside__brand-logo">
-        <a routerLink="/" target="_blank">
-            <img *ngIf="!appSession.tenant || !appSession.tenant.logoId" [src]="defaultLogo" alt="logo" height="38" />
-            <img *ngIf="appSession.tenant && appSession.tenant.logoId" [src]="remoteServiceBaseUrl + '/TenantCustomization/GetTenantLogo?skin=' + currentTheme.baseSettings.menu.asideSkin + '&tenantId=' + appSession.tenant.id + '&id=' + appSession.tenant.logoId" alt="logo" height="38" />
-        </a>
-    </div>
-    <div class="kt-aside__brand-tools">
-        <div class="kt-aside__brand-tools">
-            <button class="kt-aside__brand-aside-toggler" id="kt_aside_toggler">
-                <span></span>
-            </button>
-        </div>
-    </div>
+<div class="header-logo me-5 me-md-10 flex-grow-1 flex-lg-grow-0">
+    <a href="/">
+        <!-- Default Logos -->
+        <img
+            alt="Logo"
+            *ngIf="!appSession.tenant || !appSession.tenant.HasLogo()"
+            [src]="defaultLogo"
+            class="d-none d-lg-block h-30px"
+        />
+        <img
+            alt="Logo"
+            *ngIf="!appSession.tenant || !appSession.tenant.HasLogo()"
+            [src]="defaultLogo"
+            class="d-lg-none h-25px"
+        />
+        <!-- Tenant Logos -->
+        <img
+            alt="Logo"
+            *ngIf="appSession.tenant && appSession.tenant.HasLogo()"
+            [src]="
+                remoteServiceBaseUrl +
+                '/TenantCustomization/GetTenantLogo?skin=' +
+                skin +
+                '&tenantId=' +
+                appSession.tenant.id
+            "
+            class="d-none d-lg-block h-30px"
+        />
+        <img
+            alt="Logo"
+            *ngIf="appSession.tenant && appSession.tenant.HasLogo()"
+            [src]="
+                remoteServiceBaseUrl +
+                '/TenantCustomization/GetTenantLogo?skin=' +
+                skin +
+                '&tenantId=' +
+                appSession.tenant.id
+            "
+            class="d-lg-none h-25px"
+        />
+    </a>
 </div>

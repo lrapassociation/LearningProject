@@ -25,10 +25,15 @@ namespace CoreOSR.MultiTenancy
 
         public virtual Guid? CustomCssId { get; set; }
 
-        public virtual Guid? LogoId { get; set; }
+        public virtual Guid? DarkLogoId { get; set; }
 
         [MaxLength(MaxLogoMimeTypeLength)]
-        public virtual string LogoFileType { get; set; }
+        public virtual string DarkLogoFileType { get; set; }
+        
+        public virtual Guid? LightLogoId { get; set; }
+
+        [MaxLength(MaxLogoMimeTypeLength)]
+        public virtual string LightLogoFileType { get; set; }
 
         public SubscriptionPaymentType SubscriptionPaymentType { get; set; }
 
@@ -45,13 +50,30 @@ namespace CoreOSR.MultiTenancy
 
         public virtual bool HasLogo()
         {
-            return LogoId != null && LogoFileType != null;
+            return (DarkLogoId != null && DarkLogoFileType != null) ||
+                   (LightLogoId != null && LightLogoFileType != null);
+        }
+        
+        public virtual bool HasDarkLogo()
+        {
+            return DarkLogoId != null && DarkLogoFileType != null;
+        }     
+        
+        public virtual bool HasLightLogo()
+        {
+            return LightLogoId != null && LightLogoFileType != null;
         }
 
-        public void ClearLogo()
+        public void ClearDarkLogo()
         {
-            LogoId = null;
-            LogoFileType = null;
+            DarkLogoId = null;
+            DarkLogoFileType = null;
+        }
+        
+        public void ClearLightLogo()
+        {
+            LightLogoId = null;
+            LightLogoFileType = null;
         }
 
         public void UpdateSubscriptionDateForPayment(PaymentPeriodType paymentPeriodType, EditionPaymentType editionPaymentType)
@@ -98,9 +120,11 @@ namespace CoreOSR.MultiTenancy
             return SubscriptionEndDateUtc < Clock.Now.ToUniversalTime();
         }
 
-        public int CalculateRemainingDayCount()
+        public int CalculateRemainingHoursCount()
         {
-            return SubscriptionEndDateUtc != null ? (SubscriptionEndDateUtc.Value - Clock.Now.ToUniversalTime()).Days : 0;
+            return SubscriptionEndDateUtc != null
+                ? (int)(SubscriptionEndDateUtc.Value - Clock.Now.ToUniversalTime()).TotalHours //converting it to int is not a problem since max value ((DateTime.MaxValue - DateTime.MinValue).TotalHours = 87649416) is in range of integer.
+                : 0;
         }
 
         public bool HasUnlimitedTimeSubscription()

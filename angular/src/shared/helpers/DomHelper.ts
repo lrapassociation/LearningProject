@@ -1,5 +1,4 @@
 export class DomHelper {
-
     static waitUntilElementIsReady(selector: string, callback: any, checkPeriod?: number): void {
         let selectors = selector.split(',');
         let elementCount = selectors.length;
@@ -53,5 +52,4 @@ export class DomHelper {
 
         return undefined;
     }
-
 }

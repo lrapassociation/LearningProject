@@ -12,6 +12,7 @@ namespace CoreOSR.Authorization.Accounts.Dto
         public long UserId { get; set; }
 
         public string ResetCode { get; set; }
+        public DateTime ExpireDate { get; set; }
 
         [DisableAuditing]
         public string Password { get; set; }
@@ -21,7 +22,7 @@ namespace CoreOSR.Authorization.Accounts.Dto
         public string SingleSignIn { get; set; }
 
         /// <summary>
-        /// Encrypted values for {TenantId}, {UserId} and {ResetCode}
+        /// Encrypted values for {TenantId}, {UserId}, {ResetCode} and {ExpireDate}
         /// </summary>
         public string c { get; set; }
 
@@ -34,17 +35,32 @@ namespace CoreOSR.Authorization.Accounts.Dto
         {
             if (!string.IsNullOrEmpty(c))
             {
-                var parameters = SimpleStringCipher.Instance.Decrypt(c);
-                var query = HttpUtility.ParseQueryString(parameters);
-
-                if (query["userId"] != null)
+                try
                 {
-                    UserId = Convert.ToInt32(query["userId"]);
+                    var parameters = SimpleStringCipher.Instance.Decrypt(c);
+                    var query = HttpUtility.ParseQueryString(parameters);
+
+                    if (query["userId"] != null)
+                    {
+                        UserId = Convert.ToInt32(query["userId"]);
+                    }
+
+                    if (query["resetCode"] != null)
+                    {
+                        ResetCode = query["resetCode"];
+                    }
+
+                    if (query["expireDate"] == null)
+                    {
+                        throw new AbpValidationException();
+                    }
+                    
+                    ExpireDate = Convert.ToDateTime(query["expireDate"]);
+
                 }
-
-                if (query["resetCode"] != null)
+                catch (Exception e)
                 {
-                    ResetCode = query["resetCode"];
+                    throw new AbpValidationException("Invalid reset password link!");
                 }
             }
         }

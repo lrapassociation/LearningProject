@@ -21,8 +21,12 @@ namespace CoreOSR.Core
 
             AbpBootstrapper = AbpBootstrapper.Create<T>(options =>
             {
-                //Interceptors (dynamic proxying) are not supported in IOS platform. Also, it's not needed on the client side.
-                options.DisableAllInterceptors = true;
+                // Interceptors (dynamic proxying) are not supported in IOS platform. Also, it's not needed on the client side.
+                options.InterceptorOptions.DisableAuditingInterceptor = true;
+                options.InterceptorOptions.DisableAuthorizationInterceptor = true;
+                options.InterceptorOptions.DisableEntityHistoryInterceptor = true;
+                options.InterceptorOptions.DisableUnitOfWorkInterceptor = true;
+                options.InterceptorOptions.DisableValidationInterceptor = true;
             });
 
             AbpBootstrapper.IocManager.IocContainer.AddFacility<LoggingFacility>(f =>

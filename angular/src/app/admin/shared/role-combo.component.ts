@@ -1,37 +1,36 @@
-import { Component, ElementRef, EventEmitter, Injector, Input, OnInit, Output, ViewChild, forwardRef } from '@angular/core';
+import { Component, Injector, OnInit, forwardRef } from '@angular/core';
 import { AppComponentBase } from '@shared/common/app-component-base';
-import { RoleListDto, RoleServiceProxy } from '@shared/service-proxies/service-proxies';
-import { ControlValueAccessor, FormControl, NG_VALUE_ACCESSOR } from '@angular/forms';
+import { RoleListDto, GetRolesInput, RoleServiceProxy } from '@shared/service-proxies/service-proxies';
+import { ControlValueAccessor, UntypedFormControl, NG_VALUE_ACCESSOR } from '@angular/forms';
 
 @Component({
     selector: 'role-combo',
-    template:
-        `
-    <select class="form-control" [formControl]="selectedRole">
-        <option value="">{{'FilterByRole' | localize}}</option>
-        <option *ngFor="let role of roles" [value]="role.id">{{role.displayName}}</option>
-    </select>`,
-    providers: [{
-        provide: NG_VALUE_ACCESSOR,
-        useExisting: forwardRef(() => RoleComboComponent),
-        multi: true,
-    }]
+    template: `
+        <select class="form-select" [formControl]="selectedRole">
+            <option value="">{{ 'FilterByRole' | localize }}</option>
+            <option *ngFor="let role of roles" [value]="role.id">{{ role.displayName }}</option>
+        </select>
+    `,
+    providers: [
+        {
+            provide: NG_VALUE_ACCESSOR,
+            useExisting: forwardRef(() => RoleComboComponent),
+            multi: true,
+        },
+    ],
 })
 export class RoleComboComponent extends AppComponentBase implements OnInit, ControlValueAccessor {
-
     roles: RoleListDto[] = [];
-    selectedRole = new FormControl('');
+    selectedRole = new UntypedFormControl('');
 
-    onTouched: any = () => { };
-
-    constructor(
-        private _roleService: RoleServiceProxy,
-        injector: Injector) {
+    constructor(private _roleService: RoleServiceProxy, injector: Injector) {
         super(injector);
     }
 
+    onTouched: any = () => {};
+
     ngOnInit(): void {
-        this._roleService.getRoles(undefined).subscribe(result => {
+        this._roleService.getRoles(new GetRolesInput({ permissions: [] })).subscribe((result) => {
             this.roles = result.items;
         });
     }

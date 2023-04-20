@@ -55,6 +55,13 @@ namespace CoreOSR.Activities
         /// </summary>
         private async Task StartApplication()
         {
+            /*
+              If you are using Genymotion Emulator, set DebugServerIpAddresses.Current = "10.0.3.2".
+              If you are using a real Android device, set it as your computer's local IP and 
+                 make sure your Android device and your computer is connecting to the internet via your local Wi-Fi.
+           */
+            DebugServerIpAddresses.Current = "10.0.2.2";
+
             App.LoadPersistedSession();
 
             await UserConfigurationManager.GetIfNeedsAsync();
@@ -65,8 +72,11 @@ namespace CoreOSR.Activities
         protected override void OnCreate(Bundle savedInstanceState)
         {
             base.OnCreate(savedInstanceState);
+
             UserDialogs.Init(this);
+
             ConfigureFlurlHttp();
+
             SetExitAction();
         }
 
@@ -80,7 +90,7 @@ namespace CoreOSR.Activities
 
         private static void ConfigureFlurlHttp()
         {
-            var modernHttpClientFactory = new ModernHttpClientFactory
+            var abpHttpClientFactory = new ModernHttpClientFactory
             {
                 OnSessionTimeOut = App.OnSessionTimeout,
                 OnAccessTokenRefresh = App.OnAccessTokenRefresh
@@ -88,7 +98,7 @@ namespace CoreOSR.Activities
 
             FlurlHttp.Configure(c =>
             {
-                c.HttpClientFactory = modernHttpClientFactory;
+                c.HttpClientFactory = abpHttpClientFactory;
             });
         }
     }

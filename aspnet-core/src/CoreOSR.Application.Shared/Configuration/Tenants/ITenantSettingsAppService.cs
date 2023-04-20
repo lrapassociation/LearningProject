@@ -10,7 +10,9 @@ namespace CoreOSR.Configuration.Tenants
 
         Task UpdateAllSettings(TenantSettingsEditDto input);
 
-        Task ClearLogo();
+        Task ClearDarkLogo();
+        
+        Task ClearLightLogo();
 
         Task ClearCustomCss();
     }

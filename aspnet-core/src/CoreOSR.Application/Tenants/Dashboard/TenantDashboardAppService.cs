@@ -40,14 +40,50 @@ namespace CoreOSR.Tenants.Dashboard
             return output;
         }
 
+        public GetTopStatsOutput GetTopStats()
+        {
+            return new GetTopStatsOutput
+            {
+                TotalProfit = DashboardRandomDataGenerator.GetRandomInt(5000, 9000),
+                NewFeedbacks = DashboardRandomDataGenerator.GetRandomInt(1000, 5000),
+                NewOrders = DashboardRandomDataGenerator.GetRandomInt(100, 900),
+                NewUsers = DashboardRandomDataGenerator.GetRandomInt(50, 500)
+            };
+        }
+
+        public GetProfitShareOutput GetProfitShare()
+        {
+            return new GetProfitShareOutput
+            {
+                ProfitShares = DashboardRandomDataGenerator.GetRandomPercentageArray(3)
+            };
+        }
+
+        public GetDailySalesOutput GetDailySales()
+        {
+            return new GetDailySalesOutput
+            {
+                DailySales = DashboardRandomDataGenerator.GetRandomArray(30, 10, 50)
+            };
+        }
+
         public GetSalesSummaryOutput GetSalesSummary(GetSalesSummaryInput input)
         {
-            return new GetSalesSummaryOutput(DashboardRandomDataGenerator.GenerateSalesSummaryData(input.SalesSummaryDatePeriod));
+            var salesSummary = DashboardRandomDataGenerator.GenerateSalesSummaryData(input.SalesSummaryDatePeriod);
+            return new GetSalesSummaryOutput(salesSummary)
+            {
+                Expenses = DashboardRandomDataGenerator.GetRandomInt(0, 3000),
+                Growth = DashboardRandomDataGenerator.GetRandomInt(0, 3000),
+                Revenue = DashboardRandomDataGenerator.GetRandomInt(0, 3000),
+                TotalSales = DashboardRandomDataGenerator.GetRandomInt(0, 3000)
+            };
         }
 
         public GetRegionalStatsOutput GetRegionalStats()
         {
-            return new GetRegionalStatsOutput(DashboardRandomDataGenerator.GenerateRegionalStat());
+            return new GetRegionalStatsOutput(
+                DashboardRandomDataGenerator.GenerateRegionalStat()
+            );
         }
 
         public GetGeneralStatsOutput GetGeneralStats()

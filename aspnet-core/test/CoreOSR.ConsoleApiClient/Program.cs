@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 using Abp.Application.Services.Dto;
 using Abp.Json;
@@ -19,7 +20,7 @@ namespace CoreOSR.ConsoleApiClient
 
     class Program
     {
-        private const string ServerUrlBase = "http://localhost:62114/";
+        private const string ServerUrlBase = "https://localhost:44301/";
         
         // If you have changed "Configuration.MultiTenancy.TenantIdResolveKey" in your web app, use the same value here. 
         private const string TenantIdResolveKey = "Abp.TenantId";
@@ -53,7 +54,7 @@ namespace CoreOSR.ConsoleApiClient
 
                 ClientId = "client",
                 ClientSecret = "def2edf7-5d42-4edc-a84a-30136c340e13",
-
+                
                 Scope = "default-api",
 
                 UserName = "admin",
@@ -77,7 +78,7 @@ namespace CoreOSR.ConsoleApiClient
             {
                 client.SetBearerToken(accessToken);
 
-                var response = await client.GetAsync($"{ServerUrlBase}api/services/app/user/getUsers");
+                var response = await client.PostAsync($"{ServerUrlBase}api/services/app/user/getUsers",new StringContent("{}", Encoding.UTF8, "application/json"));
                 if (!response.IsSuccessStatusCode)
                 {
                     Console.WriteLine(response.StatusCode);

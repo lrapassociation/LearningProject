@@ -129,7 +129,7 @@ namespace CoreOSR.Tests.Organizations
         {
             //Arrange
             var ou12 = GetOrganizationUnitByName("OU12");
-            var admin = GetUserByUserName(AbpUserBase.AdminUserName);
+            var admin = await GetUserByUserNameAsync(AbpUserBase.AdminUserName);
 
             //Act
             await _organizationUnitAppService.AddUsersToOrganizationUnit(
@@ -154,7 +154,7 @@ namespace CoreOSR.Tests.Organizations
         {
             //Arrange
             var ou12 = GetOrganizationUnitByName("OU12");
-            var admin = GetUserByUserName(AbpUserBase.AdminUserName);
+            var admin = await GetUserByUserNameAsync(AbpUserBase.AdminUserName);
 
             UsingDbContext(context => context.UserOrganizationUnits.Add(new UserOrganizationUnit(AbpSession.TenantId, admin.Id, ou12.Id)));
 

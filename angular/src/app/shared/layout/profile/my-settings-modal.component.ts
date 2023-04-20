@@ -6,20 +6,25 @@ import {
     SettingScopes,
     ProfileServiceProxy,
     UpdateGoogleAuthenticatorKeyOutput,
-    SendVerificationSmsInputDto
+    SendVerificationSmsInputDto,
+    GenerateGoogleAuthenticatorKeyOutput,
+    VerifyAuthenticatorCodeInput,
 } from '@shared/service-proxies/service-proxies';
-import { ModalDirective } from 'ngx-bootstrap';
+import { ModalDirective } from 'ngx-bootstrap/modal';
 import { SmsVerificationModalComponent } from './sms-verification-modal.component';
 import { finalize } from 'rxjs/operators';
+import { EnableTwoFactorAuthenticationModalComponent } from './enable-two-factor-authentication-modal.component';
 
 @Component({
     selector: 'mySettingsModal',
-    templateUrl: './my-settings-modal.component.html'
+    templateUrl: './my-settings-modal.component.html',
 })
 export class MySettingsModalComponent extends AppComponentBase implements OnInit {
-
     @ViewChild('mySettingsModal', { static: true }) modal: ModalDirective;
-    @ViewChild('smsVerificationModal', { static: false }) smsVerificationModal: SmsVerificationModalComponent;
+    @ViewChild('enableTwoFactor', { static: true })
+    enableTwoFactorAuthenticationModal: EnableTwoFactorAuthenticationModalComponent;
+    @ViewChild('smsVerificationModal') smsVerificationModal: SmsVerificationModalComponent;
+    @ViewChild('verifyCodeModal') verifyCodeModal: SmsVerificationModalComponent;
     @Output() modalSave: EventEmitter<any> = new EventEmitter<any>();
 
     public active = false;
@@ -31,22 +36,22 @@ export class MySettingsModalComponent extends AppComponentBase implements OnInit
     public showTimezoneSelection: boolean = abp.clock.provider.supportsMultipleTimezone;
     public canChangeUserName: boolean;
     public defaultTimezoneScope: SettingScopes = SettingScopes.User;
-    private _initialTimezone: string = undefined;
     public savedPhoneNumber: string;
     public newPhoneNumber: string;
+
     isMultiTenancyEnabled: boolean = this.multiTenancy.isEnabled;
     isTwoFactorLoginEnabledForApplication = false;
 
-    constructor(
-        injector: Injector,
-        private _profileService: ProfileServiceProxy
-    ) {
+    private _initialTimezone: string = undefined;
+
+    constructor(injector: Injector, private _profileService: ProfileServiceProxy) {
         super(injector);
     }
 
     ngOnInit(): void {
-        this.isTwoFactorLoginEnabledForApplication =
-            abp.setting.getBoolean('Abp.Zero.UserManagement.TwoFactorLogin.IsEnabled');
+        this.isTwoFactorLoginEnabledForApplication = abp.setting.getBoolean(
+            'Abp.Zero.UserManagement.TwoFactorLogin.IsEnabled'
+        );
     }
 
     show(): void {
@@ -63,26 +68,35 @@ export class MySettingsModalComponent extends AppComponentBase implements OnInit
         });
     }
 
-    updateQrCodeSetupImageUrl(): void {
-        this._profileService.updateGoogleAuthenticatorKey().subscribe((result: UpdateGoogleAuthenticatorKeyOutput) => {
-            this.user.qrCodeSetupImageUrl = result.qrCodeSetupImageUrl;
-            this.isGoogleAuthenticatorEnabled = true;
-        });
+    enableTwoFactorAuthentication(): void {
+        this._profileService
+            .generateGoogleAuthenticatorKey()
+            .subscribe((result: GenerateGoogleAuthenticatorKeyOutput) => {
+                this.enableTwoFactorAuthenticationModal.model = result;
+            });
+        this.enableTwoFactorAuthenticationModal.show();
     }
 
-    disableGoogleAuthenticator(): void {
-        this._profileService.disableGoogleAuthenticator().subscribe(() => {
-            this.isGoogleAuthenticatorEnabled = false;
-        });
+    disableTwoFactorAuthentication(verifyCodeInput: VerifyAuthenticatorCodeInput): void {
+        this._profileService
+            .disableGoogleAuthenticator(verifyCodeInput)
+            .pipe(
+                finalize(() => {
+                    this.saving = false;
+                })
+            )
+            .subscribe(() => {
+                this.close();
+                this.message.success(this.l('TwoFactorAuthenticationDisabled'));
+            });
     }
 
     smsVerify(): void {
         let input = new SendVerificationSmsInputDto();
         input.phoneNumber = this.user.phoneNumber;
-        this._profileService.sendVerificationSms(input)
-            .subscribe(() => {
-                this.smsVerificationModal.show();
-            });
+        this._profileService.sendVerificationSms(input).subscribe(() => {
+            this.smsVerificationModal.show();
+        });
     }
 
     changePhoneNumberToVerified(): void {
@@ -101,8 +115,13 @@ export class MySettingsModalComponent extends AppComponentBase implements OnInit
 
     save(): void {
         this.saving = true;
-        this._profileService.updateCurrentUserProfile(this.user)
-            .pipe(finalize(() => { this.saving = false; }))
+        this._profileService
+            .updateCurrentUserProfile(this.user)
+            .pipe(
+                finalize(() => {
+                    this.saving = false;
+                })
+            )
             .subscribe(() => {
                 this.appSession.user.name = this.user.name;
                 this.appSession.user.surname = this.user.surname;
@@ -119,5 +138,4 @@ export class MySettingsModalComponent extends AppComponentBase implements OnInit
                 }
             });
     }
-
 }

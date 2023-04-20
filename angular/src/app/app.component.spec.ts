@@ -5,26 +5,25 @@ import { TestBed, async } from '@angular/core/testing';
 import { API_BASE_URL } from '@shared/service-proxies/service-proxies';
 import { RootModule } from '../root.module';
 import { AppComponent } from './app.component';
+import { LOCALE_ID } from '@angular/core';
 
 export function getRemoteServiceBaseUrl(): string {
-    return 'http://localhost:22742';
+    return 'https://localhost:44301';
 }
 
 describe('App: CoreOSR', () => {
-
     // Remove freezeui loading animation
-    (window as any).FreezeUI = function () { };
-    (window as any).UnFreezeUI = function () { };
+    (window as any).FreezeUI = function () {};
+    (window as any).UnFreezeUI = function () {};
 
     beforeEach(async(() => {
         TestBed.configureTestingModule({
-            imports: [
-                RootModule
-            ],
+            imports: [RootModule],
             providers: [
                 { provide: API_BASE_URL, useValue: getRemoteServiceBaseUrl() },
-                { provide: APP_BASE_HREF, useValue: '/' }
-            ]
+                { provide: APP_BASE_HREF, useValue: '/' },
+                { provide: LOCALE_ID, useValue: 'en' },
+            ],
         }).compileComponents();
     }));
 

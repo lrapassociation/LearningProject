@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace CoreOSR.MultiTenancy.HostDashboard.Dto
@@ -6,9 +7,12 @@ namespace CoreOSR.MultiTenancy.HostDashboard.Dto
     {
         public List<ExpiringTenant> ExpiringTenants { get; set; }
 
-        public GetExpiringTenantsOutput(List<ExpiringTenant> expiringTenants)
-        {
-            ExpiringTenants = expiringTenants;
-        }
+        public int SubscriptionEndAlertDayCount { get; set; }
+
+        public int MaxExpiringTenantsShownCount { get; set; }
+
+        public DateTime SubscriptionEndDateStart { get; set; }
+
+        public DateTime SubscriptionEndDateEnd { get; set; }
     }
 }

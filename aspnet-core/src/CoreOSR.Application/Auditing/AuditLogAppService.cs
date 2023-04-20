@@ -199,8 +199,7 @@ namespace CoreOSR.Auditing
 
         public async Task<List<EntityPropertyChangeDto>> GetEntityPropertyChanges(long entityChangeId)
         {
-            var entityPropertyChanges = (await _entityPropertyChangeRepository.GetAllListAsync())
-                .Where(epc => epc.EntityChangeId == entityChangeId);
+            var entityPropertyChanges = await _entityPropertyChangeRepository.GetAllListAsync(epc => epc.EntityChangeId == entityChangeId);
 
             return ObjectMapper.Map<List<EntityPropertyChangeDto>>(entityPropertyChanges);
         }

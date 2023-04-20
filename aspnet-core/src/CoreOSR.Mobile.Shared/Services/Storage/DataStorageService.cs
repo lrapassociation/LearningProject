@@ -1,6 +1,6 @@
 ﻿using System.Threading.Tasks;
-using Abp.AutoMapper;
 using Abp.Dependency;
+using Abp.ObjectMapping;
 using CoreOSR.ApiClient;
 using CoreOSR.ApiClient.Models;
 using CoreOSR.Core.DataStorage;
@@ -12,10 +12,14 @@ namespace CoreOSR.Services.Storage
     public class DataStorageService : IDataStorageService, ISingletonDependency
     {
         private readonly IDataStorageManager _dataStorageManager;
+        private readonly IObjectMapper _objectMapper;
 
-        public DataStorageService(IDataStorageManager dataStorageManager)
+        public DataStorageService(
+            IDataStorageManager dataStorageManager,
+            IObjectMapper objectMapper)
         {
             _dataStorageManager = dataStorageManager;
+            _objectMapper = objectMapper;
         }
 
         public async Task StoreAccessTokenAsync(string newAccessToken)
@@ -29,36 +33,55 @@ namespace CoreOSR.Services.Storage
 
         public AbpAuthenticateResultModel RetrieveAuthenticateResult()
         {
-            return _dataStorageManager.Retrieve<AuthenticateResultPersistanceModel>(
-                DataStorageKey.CurrentSession_TokenInfo).MapTo<AbpAuthenticateResultModel>();
+            return _objectMapper.Map<AbpAuthenticateResultModel>(
+                _dataStorageManager.Retrieve<AuthenticateResultPersistanceModel>(
+                    DataStorageKey.CurrentSession_TokenInfo
+                )
+            );
         }
 
         public async Task StoreAuthenticateResultAsync(AbpAuthenticateResultModel authenticateResultModel)
         {
-            await _dataStorageManager.StoreAsync(DataStorageKey.CurrentSession_TokenInfo,
-                authenticateResultModel.MapTo<AuthenticateResultPersistanceModel>());
+            await _dataStorageManager.StoreAsync(
+                DataStorageKey.CurrentSession_TokenInfo,
+                _objectMapper.Map<AuthenticateResultPersistanceModel>(authenticateResultModel)
+            );
         }
 
         public TenantInformation RetrieveTenantInfo()
         {
-            return _dataStorageManager.Retrieve<TenantInformationPersistanceModel>(DataStorageKey.CurrentSession_TenantInfo)
-                 .MapTo<TenantInformation>();
+            return _objectMapper.Map<TenantInformation>(
+                _dataStorageManager.Retrieve<TenantInformationPersistanceModel>(
+                    DataStorageKey.CurrentSession_TenantInfo
+                )
+            );
         }
 
         public async Task StoreTenantInfoAsync(TenantInformation tenantInfo)
         {
-            await _dataStorageManager.StoreAsync(DataStorageKey.CurrentSession_TenantInfo, tenantInfo.MapTo<TenantInformationPersistanceModel>());
+            await _dataStorageManager.StoreAsync(
+                DataStorageKey.CurrentSession_TenantInfo,
+                _objectMapper.Map<TenantInformationPersistanceModel>(tenantInfo)
+            );
         }
 
         public GetCurrentLoginInformationsOutput RetrieveLoginInfo()
         {
-            return _dataStorageManager.Retrieve<CurrentLoginInformationPersistanceModel>(DataStorageKey.CurrentSession_LoginInfo)
-                .MapTo<GetCurrentLoginInformationsOutput>();
+            return _objectMapper.Map<GetCurrentLoginInformationsOutput>(
+                _dataStorageManager.Retrieve<CurrentLoginInformationPersistanceModel>(
+                    DataStorageKey.CurrentSession_LoginInfo
+                )
+            );
         }
 
         public async Task StoreLoginInformationAsync(GetCurrentLoginInformationsOutput loginInfo)
         {
-            await _dataStorageManager.StoreAsync(DataStorageKey.CurrentSession_LoginInfo, loginInfo.MapTo<CurrentLoginInformationPersistanceModel>());
+            await _dataStorageManager.StoreAsync(
+                DataStorageKey.CurrentSession_LoginInfo,
+                _objectMapper.Map<CurrentLoginInformationPersistanceModel>(
+                    loginInfo
+                )
+            );
         }
 
         public void ClearSessionPersistance()

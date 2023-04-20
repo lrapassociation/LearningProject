@@ -1,7 +1,16 @@
-﻿namespace CoreOSR.DemoUiComponents.Dto
+﻿using System;
+
+namespace CoreOSR.DemoUiComponents.Dto
 {
-    public class DateToStringOutput
+    public class DateFieldOutput
     {
-        public string DateString { get; set; }
+        public DateTime Date { get; set; }
+    }
+    
+    public class DateRangeFieldOutput
+    {
+        public DateTime StartDate { get; set; }
+        
+        public DateTime EndDate { get; set; }
     }
 }

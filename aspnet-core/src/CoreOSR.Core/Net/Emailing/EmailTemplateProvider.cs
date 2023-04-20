@@ -1,10 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Text;
 using Abp.Dependency;
 using Abp.Extensions;
 using Abp.IO.Extensions;
+using Abp.MultiTenancy;
 using Abp.Reflection.Extensions;
+using CoreOSR.MultiTenancy;
 using CoreOSR.Url;
 
 namespace CoreOSR.Net.Emailing
@@ -12,11 +14,13 @@ namespace CoreOSR.Net.Emailing
     public class EmailTemplateProvider : IEmailTemplateProvider, ISingletonDependency
     {
         private readonly IWebUrlService _webUrlService;
+        private readonly ITenantCache _tenantCache;
         private readonly ConcurrentDictionary<string, string> _defaultTemplates;
 
-        public EmailTemplateProvider(IWebUrlService webUrlService)
+        public EmailTemplateProvider(IWebUrlService webUrlService, ITenantCache tenantCache)
         {
             _webUrlService = webUrlService;
+            _tenantCache = tenantCache;
             _defaultTemplates = new ConcurrentDictionary<string, string>();
         }
 
@@ -40,10 +44,11 @@ namespace CoreOSR.Net.Emailing
         {
             if (!tenantId.HasValue)
             {
-                return _webUrlService.GetServerRootAddress().EnsureEndsWith('/') + "TenantCustomization/GetTenantLogo?skin=light";
+                return _webUrlService.GetServerRootAddress().EnsureEndsWith('/') + "TenantCustomization/GetTenantLogo/light/png";
             }
 
-            return _webUrlService.GetServerRootAddress().EnsureEndsWith('/') + "TenantCustomization/GetTenantLogo?skin=light&tenantId=" + tenantId.Value;
+            var tenant = _tenantCache.Get(tenantId.Value);
+            return _webUrlService.GetServerRootAddress(tenant.TenancyName).EnsureEndsWith('/') + "TenantCustomization/GetTenantLogo/light/" + tenantId.Value + "/png";
         }
     }
 }

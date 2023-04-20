@@ -1,4 +1,6 @@
-﻿namespace CoreOSR.MultiTenancy.Payments.PayPal.Dto
+﻿using System.Collections.Generic;
+
+namespace CoreOSR.MultiTenancy.Payments.PayPal.Dto
 {
     public class PayPalConfigurationDto
     {
@@ -7,5 +9,7 @@
         public string DemoUsername { get; set; }
 
         public string DemoPassword { get; set; }
+        
+        public List<string> DisabledFundings { get; set; }
     }
 }

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using Abp.Dependency;
 using Abp.Domain.Repositories;
+using Abp.Domain.Uow;
 using Abp.Threading;
 using Abp.Threading.BackgroundWorkers;
 using Abp.Threading.Timers;
@@ -21,13 +22,15 @@ namespace CoreOSR.MultiTenancy
         private readonly IRepository<SubscribableEdition> _editionRepository;
         private readonly TenantManager _tenantManager;
         private readonly UserEmailer _userEmailer;
+        private readonly IUnitOfWorkManager _unitOfWorkManager;
 
         public SubscriptionExpirationCheckWorker(
             AbpTimer timer,
             IRepository<Tenant> tenantRepository,
             IRepository<SubscribableEdition> editionRepository,
             TenantManager tenantManager,
-            UserEmailer userEmailer)
+            UserEmailer userEmailer,
+            IUnitOfWorkManager unitOfWorkManager)
             : base(timer)
         {
             _tenantRepository = tenantRepository;
@@ -39,62 +42,66 @@ namespace CoreOSR.MultiTenancy
             Timer.RunOnStart = true;
 
             LocalizationSourceName = CoreOSRConsts.LocalizationSourceName;
+            _unitOfWorkManager = unitOfWorkManager;
         }
 
         protected override void DoWork()
         {
-            var utcNow = Clock.Now.ToUniversalTime();
-            var failedTenancyNames = new List<string>();
-
-            var subscriptionExpiredTenants = _tenantRepository.GetAllList(
-                tenant => tenant.SubscriptionEndDateUtc != null &&
-                          tenant.SubscriptionEndDateUtc <= utcNow &&
-                          tenant.IsActive &&
-                          tenant.EditionId != null
-            );
-
-            foreach (var tenant in subscriptionExpiredTenants)
+            _unitOfWorkManager.WithUnitOfWork(() =>
             {
-                Debug.Assert(tenant.EditionId.HasValue);
+                var utcNow = Clock.Now.ToUniversalTime();
+                var failedTenancyNames = new List<string>();
 
-                try
+                var subscriptionExpiredTenants = _tenantRepository.GetAllList(
+                    tenant => tenant.SubscriptionEndDateUtc != null &&
+                              tenant.SubscriptionEndDateUtc <= utcNow &&
+                              tenant.IsActive &&
+                              tenant.EditionId != null
+                );
+
+                foreach (var tenant in subscriptionExpiredTenants)
                 {
+                    Debug.Assert(tenant.EditionId.HasValue);
 
-                    var edition = _editionRepository.Get(tenant.EditionId.Value);
-
-                    Debug.Assert(tenant.SubscriptionEndDateUtc != null, "tenant.SubscriptionEndDateUtc != null");
-
-                    if (tenant.SubscriptionEndDateUtc.Value.AddDays(edition.WaitingDayAfterExpire ?? 0) >= utcNow)
+                    try
                     {
-                        //Tenant is in waiting days after expire TODO: It's better to filter such entities while querying from repository!
-                        continue;
+
+                        var edition = _editionRepository.Get(tenant.EditionId.Value);
+
+                        Debug.Assert(tenant.SubscriptionEndDateUtc != null, "tenant.SubscriptionEndDateUtc != null");
+
+                        if (tenant.SubscriptionEndDateUtc.Value.AddDays(edition.WaitingDayAfterExpire ?? 0) >= utcNow)
+                        {
+                            //Tenant is in waiting days after expire TODO: It's better to filter such entities while querying from repository!
+                            continue;
+                        }
+
+                        var endSubscriptionResult = AsyncHelper.RunSync(() => _tenantManager.EndSubscriptionAsync(tenant, edition, utcNow));
+
+                        if (endSubscriptionResult == EndSubscriptionResult.TenantSetInActive)
+                        {
+                            AsyncHelper.RunSync(() => _userEmailer.TryToSendSubscriptionExpireEmail(tenant.Id, utcNow));
+                        }
+                        else if (endSubscriptionResult == EndSubscriptionResult.AssignedToAnotherEdition)
+                        {
+                            AsyncHelper.RunSync(() => _userEmailer.TryToSendSubscriptionAssignedToAnotherEmail(tenant.Id, utcNow, edition.ExpiringEditionId.Value));
+                        }
                     }
-
-                    var endSubscriptionResult = AsyncHelper.RunSync(() => _tenantManager.EndSubscriptionAsync(tenant, edition, utcNow));
-
-                    if (endSubscriptionResult == EndSubscriptionResult.TenantSetInActive)
+                    catch (Exception exception)
                     {
-                        AsyncHelper.RunSync(() => _userEmailer.TryToSendSubscriptionExpireEmail(tenant.Id, utcNow));
-                    }
-                    else if (endSubscriptionResult == EndSubscriptionResult.AssignedToAnotherEdition)
-                    {
-                        AsyncHelper.RunSync(() => _userEmailer.TryToSendSubscriptionAssignedToAnotherEmail(tenant.Id, utcNow, edition.ExpiringEditionId.Value));
+                        failedTenancyNames.Add(tenant.TenancyName);
+                        Logger.Error($"Subscription of tenant {tenant.TenancyName} has been expired but tenant couldn't be made passive !");
+                        Logger.Error(exception.Message, exception);
                     }
                 }
-                catch (Exception exception)
+
+                if (!failedTenancyNames.Any())
                 {
-                    failedTenancyNames.Add(tenant.TenancyName);
-                    Logger.Error($"Subscription of tenant {tenant.TenancyName} has been expired but tenant couldn't be made passive !");
-                    Logger.Error(exception.Message, exception);
+                    return;
                 }
-            }
 
-            if (!failedTenancyNames.Any())
-            {
-                return;
-            }
-
-            AsyncHelper.RunSync(() => _userEmailer.TryToSendFailedSubscriptionTerminationsEmail(failedTenancyNames, utcNow));
+                AsyncHelper.RunSync(() => _userEmailer.TryToSendFailedSubscriptionTerminationsEmail(failedTenancyNames, utcNow));
+            });
         }
     }
 }

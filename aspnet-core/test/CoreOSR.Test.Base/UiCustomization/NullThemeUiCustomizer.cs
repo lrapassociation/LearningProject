@@ -18,12 +18,12 @@ namespace CoreOSR.Test.Base.UiCustomization
             throw new System.NotImplementedException();
         }
 
-        public Task UpdateTenantUiManagementSettingsAsync(int tenantId, ThemeSettingsDto settings)
+        public Task UpdateTenantUiManagementSettingsAsync(int tenantId, ThemeSettingsDto settings, UserIdentifier changerUser)
         {
             throw new System.NotImplementedException();
         }
 
-        public Task UpdateApplicationUiManagementSettingsAsync(ThemeSettingsDto settings)
+        public Task UpdateApplicationUiManagementSettingsAsync(ThemeSettingsDto settings, UserIdentifier changerUser)
         {
             throw new System.NotImplementedException();
         }
@@ -34,6 +34,21 @@ namespace CoreOSR.Test.Base.UiCustomization
         }
 
         public Task<ThemeSettingsDto> GetTenantUiCustomizationSettings(int tenantId)
+        {
+            throw new System.NotImplementedException();
+        }
+
+        public Task UpdateDarkModeSettingsAsync(UserIdentifier user, bool isDarkModeEnabled)
+        {
+            throw new System.NotImplementedException();
+        }
+
+        public Task<string> GetBodyClass()
+        {
+            throw new System.NotImplementedException();
+        }
+
+        public Task<string> GetBodyStyle()
         {
             throw new System.NotImplementedException();
         }

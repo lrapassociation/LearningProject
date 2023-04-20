@@ -3,23 +3,24 @@ import { Router } from '@angular/router';
 import { AppConsts } from '@shared/AppConsts';
 import { AppComponentBase } from '@shared/common/app-component-base';
 import { AppUiCustomizationService } from '@shared/common/ui/app-ui-customization.service';
-import * as _ from 'lodash';
-import * as moment from 'moment';
+import { filter as _filter } from 'lodash-es';
 import { LoginService } from './login/login.service';
+import { DateTime } from 'luxon';
+import { DateTimeService } from '@app/shared/common/timing/date-time.service';
+import { AppPreBootstrap } from 'AppPreBootstrap';
 
 @Component({
     templateUrl: './account.component.html',
-    styleUrls: [
-        './account.component.less'
-    ],
-    encapsulation: ViewEncapsulation.None
+    styleUrls: ['./account.component.less'],
+    encapsulation: ViewEncapsulation.None,
 })
 export class AccountComponent extends AppComponentBase implements OnInit {
-
-    private viewContainerRef: ViewContainerRef;
-
-    currentYear: number = moment().year();
+    currentYear: number = this._dateTimeService.getYear();
     remoteServiceBaseUrl: string = AppConsts.remoteServiceBaseUrl;
+    skin = this.appSession.theme.baseSettings.layout.darkMode ? 'dark' : 'light';
+    defaultLogo = AppConsts.appBaseUrl + '/assets/common/images/app-logo-on-' + this.skin + '.svg';
+    backgroundImageName = this.appSession.theme.baseSettings.layout.darkMode ? 'login-dark' : 'login';
+
     tenantChangeDisabledRoutes: string[] = [
         'select-edition',
         'buy',
@@ -29,14 +30,21 @@ export class AccountComponent extends AppComponentBase implements OnInit {
         'stripe-purchase',
         'stripe-subscribe',
         'stripe-update-subscription',
-        'paypal-purchase'
+        'paypal-purchase',
+        'stripe-payment-result',
+        'payment-completed',
+        'stripe-cancel-payment',
+        'session-locked',
     ];
+
+    private viewContainerRef: ViewContainerRef;
 
     public constructor(
         injector: Injector,
         private _router: Router,
         private _loginService: LoginService,
         private _uiCustomizationService: AppUiCustomizationService,
+        private _dateTimeService: DateTimeService,
         viewContainerRef: ViewContainerRef
     ) {
         super(injector);
@@ -50,14 +58,17 @@ export class AccountComponent extends AppComponentBase implements OnInit {
             return false;
         }
 
-        if (_.filter(this.tenantChangeDisabledRoutes, route => this._router.url.indexOf('/account/' + route) >= 0).length) {
+        if (
+            _filter(this.tenantChangeDisabledRoutes, (route) => this._router.url.indexOf('/account/' + route) >= 0)
+                .length
+        ) {
             return false;
         }
 
         return abp.multiTenancy.isEnabled && !this.supportsTenancyNameInUrl();
     }
 
-    useFullWidthLayout(): boolean {
+    isSelectEditionPage(): boolean {
         return this._router.url.indexOf('/account/select-edition') >= 0;
     }
 
@@ -74,7 +85,11 @@ export class AccountComponent extends AppComponentBase implements OnInit {
         return 'url(./assets/metronic/themes/' + this.currentTheme.baseSettings.theme + '/images/bg/bg-4.jpg)';
     }
 
+    getLogoSkin(): string {
+        return this.currentTheme.baseSettings.layout.darkMode ? "light" : "dark";
+    }
+
     private supportsTenancyNameInUrl() {
-        return (AppConsts.appBaseUrlFormat && AppConsts.appBaseUrlFormat.indexOf(AppConsts.tenancyNamePlaceHolderInUrl) >= 0);
+        return AppPreBootstrap.resolveTenancyName(AppConsts.appBaseUrlFormat) != null;
     }
 }

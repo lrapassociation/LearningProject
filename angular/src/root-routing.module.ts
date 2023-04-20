@@ -6,20 +6,19 @@ const routes: Routes = [
     { path: '', redirectTo: '/app/main/dashboard', pathMatch: 'full' },
     {
         path: 'account',
-        loadChildren: () => import('account/account.module').then(m => m.AccountModule), //Lazy load account module
-        data: { preload: true }
-    }
+        loadChildren: () => import('account/account.module').then((m) => m.AccountModule), //Lazy load account module
+        data: { preload: true },
+    },
+    { path: '**', redirectTo: '/app/main/dashboard' },
 ];
 
 @NgModule({
     imports: [RouterModule.forRoot(routes)],
     exports: [RouterModule],
-    providers: []
+    providers: [],
 })
 export class RootRoutingModule {
-    constructor(
-        private router: Router,
-        private _uiCustomizationService: AppUiCustomizationService) {
+    constructor(private router: Router, private _uiCustomizationService: AppUiCustomizationService) {
         router.events.subscribe((event: NavigationEnd) => {
             setTimeout(() => {
                 this.toggleBodyCssClass(event.url);
@@ -49,20 +48,20 @@ export class RootRoutingModule {
         let currentBodyClass = document.body.className;
         let classesToRemember = '';
 
-        if (currentBodyClass.indexOf('m-brand--minimize') >= 0) {
-            classesToRemember += ' m-brand--minimize ';
+        if (currentBodyClass.indexOf('brand-minimize') >= 0) {
+            classesToRemember += ' brand-minimize ';
         }
 
-        if (currentBodyClass.indexOf('m-aside-left--minimize') >= 0) {
-            classesToRemember += ' m-aside-left--minimize';
+        if (currentBodyClass.indexOf('aside-left-minimize') >= 0) {
+            classesToRemember += ' aside-left-minimize';
         }
 
-        if (currentBodyClass.indexOf('m-brand--hide') >= 0) {
-            classesToRemember += ' m-brand--hide';
+        if (currentBodyClass.indexOf('brand-hide') >= 0) {
+            classesToRemember += ' brand-hide';
         }
 
-        if (currentBodyClass.indexOf('m-aside-left--hide') >= 0) {
-            classesToRemember += ' m-aside-left--hide';
+        if (currentBodyClass.indexOf('aside-left-hide') >= 0) {
+            classesToRemember += ' aside-left-hide';
         }
 
         if (currentBodyClass.indexOf('swal2-toast-shown') >= 0) {

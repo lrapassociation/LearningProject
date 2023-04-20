@@ -5,14 +5,15 @@ import { AppComponentBase } from '@shared/common/app-component-base';
 import { Subscription, Observable } from 'rxjs';
 import { timer } from 'rxjs';
 import { LoginService } from './login.service';
+import { ReCaptchaV3Service } from 'ng-recaptcha';
+import { AppConsts } from '@shared/AppConsts';
 
 @Component({
     templateUrl: './validate-two-factor-code.component.html',
     styleUrls: ['./validate-two-factor-code.component.less'],
-    animations: [accountModuleAnimation()]
+    animations: [accountModuleAnimation()],
 })
 export class ValidateTwoFactorCodeComponent extends AppComponentBase implements CanActivate, OnInit, OnDestroy {
-
     code: string;
     submitting = false;
     remainingSeconds = 90;
@@ -21,15 +22,18 @@ export class ValidateTwoFactorCodeComponent extends AppComponentBase implements 
     constructor(
         injector: Injector,
         public loginService: LoginService,
+        private _reCaptchaV3Service: ReCaptchaV3Service,
         private _router: Router
     ) {
         super(injector);
     }
 
+    get useCaptcha(): boolean {
+        return this.setting.getBoolean('App.UserManagement.UseCaptchaOnLogin');
+    }
+
     canActivate(): boolean {
-        if (this.loginService.authenticateModel &&
-            this.loginService.authenticateResult
-        ) {
+        if (this.loginService.authenticateModel && this.loginService.authenticateResult) {
             return true;
         }
 
@@ -41,6 +45,8 @@ export class ValidateTwoFactorCodeComponent extends AppComponentBase implements 
             this._router.navigate(['account/login']);
             return;
         }
+
+        this.remainingSeconds = this.appSession.application.twoFactorCodeExpireSeconds;
 
         const timerSource = timer(1000, 1000);
         this.timerSubscription = timerSource.subscribe(() => {
@@ -62,7 +68,15 @@ export class ValidateTwoFactorCodeComponent extends AppComponentBase implements 
     }
 
     submit(): void {
-        this.loginService.authenticateModel.twoFactorVerificationCode = this.code;
-        this.loginService.authenticate();
+        let recaptchaCallback = (token: string) => {
+            this.loginService.authenticateModel.twoFactorVerificationCode = this.code;
+            this.loginService.authenticate(() => { }, null, token);
+        };
+
+        if (this.useCaptcha) {
+            this._reCaptchaV3Service.execute('login').subscribe((token) => recaptchaCallback(token));
+        } else {
+            recaptchaCallback(null);
+        }
     }
 }

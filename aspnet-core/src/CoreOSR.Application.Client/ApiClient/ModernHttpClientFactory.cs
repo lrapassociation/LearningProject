@@ -3,7 +3,6 @@ using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Flurl.Http.Configuration;
-using ModernHttpClient;
 
 namespace CoreOSR.ApiClient
 {
@@ -17,18 +16,29 @@ namespace CoreOSR.ApiClient
         /// <summary>
         /// Callback function for access token refresh
         /// </summary>
-        public Func<string, Task> OnAccessTokenRefresh { get; set; }
+        public Func<string, string, Task> OnAccessTokenRefresh { get; set; }
 
         public override HttpMessageHandler CreateMessageHandler()
         {
-            return new AuthenticationHttpHandler(new NativeMessageHandler
+            var httpClientHandler = new System.Net.Http.HttpClientHandler()
             {
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-            })
+            };
+
+#if DEBUG
+            TrustLocalDeveloperCert(httpClientHandler);
+#endif
+
+            return new AuthenticationHttpHandler(httpClientHandler)
             {
                 OnSessionTimeOut = OnSessionTimeOut,
                 OnAccessTokenRefresh = OnAccessTokenRefresh
             };
+        }
+
+        private static void TrustLocalDeveloperCert(HttpClientHandler messageHandler)
+        {
+            messageHandler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true;
         }
     }
 }
